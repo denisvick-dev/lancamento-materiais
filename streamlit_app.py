@@ -202,7 +202,7 @@ def carregar_ativos() -> pd.DataFrame:
 
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_materiais() -> pd.DataFrame:
-    """Carrega o catálogo de materiais (de materiais.py) da planilha ou do CSV local."""
+    """Carrega o catálogo CSV local, usando a planilha Google como fallback."""
     if _planilha_configurada():
         return materiais.carregar_materiais(ler_planilha=_ler_planilha_fuzzy, avisar=st.warning)
     return materiais.carregar_materiais()
@@ -263,7 +263,7 @@ OPCAO_OUTRO = "✏️ Outro (informar manualmente)"
 
 
 def pagina_lancar() -> None:
-    st.title("Atendimento FORA TOA — SPO-TOTALLESTE")
+    st.title("Lançamento de Materiais — Fora TOA - TOTALE Tecnologia")
     st.caption("Gestão de Material")
 
     ativos = carregar_ativos()

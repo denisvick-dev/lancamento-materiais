@@ -7,7 +7,7 @@ seguindo a estrutura do Atendimento FORA TOA — SPO-TOTALLESTE (Gestão de Mate
 
 - **Identificação do Técnico** (Login da lista de ativos, RE e Nome preenchidos automaticamente)
 - **Dados do Contrato** (Contrato, Tipo de Atendimento, Data, WO)
-- **Materiais Utilizados** (seleção no catálogo `catalogo_materiais.csv` / aba "Materiais" da planilha, com quantidade por item)
+- **Materiais Utilizados** (seleção no catálogo local `catalogo_materiais.csv`, com a aba "Materiais" da planilha Google como fallback; quantidade por item)
 - **Evidências** (upload de fotos, salvas em `dados/evidencias/<contrato>/`)
 - **Observações**
 
