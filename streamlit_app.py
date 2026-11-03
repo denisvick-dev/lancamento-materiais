@@ -80,18 +80,38 @@ def injetar_estilos() -> None:
         "{ font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif !important; } "
         "h1, h2, h3, h4, h5, h6, .stTitle "
         "{ font-family: 'Manrope', 'Inter', Arial, sans-serif !important; } "
-        # fundo suave e conteúdo centralizado em card, como a referência
-        "[data-testid='stAppViewContainer'] { background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 40%); } "
-        "[data-testid='stMainBlockContainer'] { max-width: 880px; padding-top: 1.5rem; } "
-        "[data-testid='stVerticalBlockBorderWrapper'] { background: #ffffff; border: 1px solid #e5e7eb; "
-        "border-radius: 16px; padding: 1.5rem 1.75rem; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); } "
+        # fundo suave com faixa gradiente no topo
+        "[data-testid='stAppViewContainer'] { background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 45%); } "
+        "[data-testid='stAppViewContainer']::before { content: ''; display: block; height: 6px; "
+        "background: linear-gradient(90deg, #4f46e5, #7c3aed, #0ea5e9); } "
+        "[data-testid='stMainBlockContainer'] { max-width: 900px; padding-top: 1rem; } "
+        "[data-testid='stHeader'] { background: transparent; } "
+        # card central
+        "[data-testid='stVerticalBlockBorderWrapper'] { background: #ffffff; border: 1px solid #e8eaf0; "
+        "border-radius: 18px; padding: 1.75rem 2rem; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.10); } "
         "[data-testid='stVerticalBlockBorderWrapper'] h2, [data-testid='stVerticalBlockBorderWrapper'] h3 "
-        "{ color: #111827; border-bottom: 1px solid #eef0f4; padding-bottom: .4rem; margin-top: 1.2rem; } "
-        "input, textarea, select { border-radius: 10px !important; border-color: #e5e7eb !important; } "
-        "[data-testid='stButton'] button { background: #4f46e5; color: #fff; "
-        "border: none; border-radius: 10px; font-weight: 600; padding: .55rem 1.4rem; } "
-        "[data-testid='stButton'] button:hover { background: #4338ca; } "
-        "[data-testid='stSidebar'] { background: #ffffff; border-right: 1px solid #e5e7eb; }"
+        "{ color: #0f172a; border-bottom: 2px solid #eef0f4; padding-bottom: .45rem; margin-top: 1.4rem; "
+        "letter-spacing: -0.01em; } "
+        # campos
+        "input, textarea, select { border-radius: 10px !important; border-color: #e2e8f0 !important; "
+        "background: #fbfcfe !important; transition: border-color .15s, box-shadow .15s; } "
+        "input:focus, textarea:focus, select:focus { border-color: #6366f1 !important; "
+        "box-shadow: 0 0 0 3px rgba(99, 102, 241, .15) !important; background: #fff !important; } "
+        # botões
+        "[data-testid='stButton'] button { background: linear-gradient(135deg, #4f46e5, #6d28d9); color: #fff; "
+        "border: none; border-radius: 12px; font-weight: 700; padding: .6rem 1.5rem; "
+        "box-shadow: 0 4px 14px rgba(79, 70, 229, .35); transition: transform .12s, box-shadow .12s; } "
+        "[data-testid='stButton'] button:hover { transform: translateY(-1px); "
+        "box-shadow: 0 6px 18px rgba(79, 70, 229, .45); } "
+        # barra lateral com marca
+        "[data-testid='stSidebar'] { background: #ffffff; border-right: 1px solid #e8eaf0; } "
+        "[data-testid='stSidebar'] [data-testid='stMarkdown'] h1 { font-size: 1.25rem; "
+        "background: linear-gradient(90deg, #4f46e5, #0ea5e9); -webkit-background-clip: text; "
+        "background-clip: text; color: transparent; } "
+        # tabela e métricas
+        "[data-testid='stDataFrame'] { border-radius: 12px; overflow: hidden; } "
+        "[data-testid='stMetric'] { background: #f8fafc; border: 1px solid #e8eaf0; border-radius: 12px; padding: .5rem .75rem; } "
+        "[data-testid='stMetricValue'] { color: #4f46e5; }"
     )
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
@@ -259,72 +279,87 @@ def salvar_dados(df: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 # Páginas
 # ---------------------------------------------------------------------------
-OPCAO_OUTRO = "✏️ Outro (informar manualmente)"
-
-
 def pagina_lancar() -> None:
     st.title("Lançamento de Materiais — Fora TOA - TOTALE Tecnologia")
     st.caption("Gestão de Material")
 
+    # 3) Preenche o formulário ao duplicar um atendimento existente
+    prefill = st.session_state.pop("prefill", None)
+    if prefill:
+        st.session_state["re_tec"] = prefill.get("RE", "")
+        st.session_state["login_tec"] = prefill.get("Login p/ Inserir material", "")
+        st.session_state["nome_tec"] = prefill.get("Técnico", "")
+        st.session_state["contrato"] = prefill.get("Contrato", "")
+        st.session_state["wo"] = prefill.get("WO", "")
+        st.session_state["cep"] = prefill.get("CEP", "")
+        st.session_state["endereco"] = prefill.get("Endereço", "")
+        st.session_state["numero"] = prefill.get("Número", "")
+        st.session_state["complemento"] = prefill.get("Complemento", "")
+        st.toast("🔁 Atendimento duplicado — ajuste os materiais e registre!")
+
     ativos = carregar_ativos()
-    mapa_ativos = {}
-    opcoes_login = []
-    for _, r in ativos.iterrows():
-        login = str(r["Login"]).strip()
-        if not login:
-            continue
-        label = f"{login} — {r['Técnico']}" if str(r["Técnico"]).strip() else login
-        opcoes_login.append(label)
-        mapa_ativos[label] = r
-    opcoes_login.append(OPCAO_OUTRO)
+    mapa_por_re = {
+        str(r["RE"]).strip(): r for _, r in ativos.iterrows() if str(r["RE"]).strip()
+    }
 
-    def ao_escolher_login() -> None:
-        sel = st.session_state.get("login_sel")
-        if sel in mapa_ativos:
-            st.session_state["tec_auto"] = mapa_ativos[sel]["Técnico"]
-            st.session_state["re_auto"] = mapa_ativos[sel]["RE"]
+    def ao_digitar_re() -> None:
+        """Ao digitar o RE, puxa Login e Nome da lista de ativos."""
+        re = str(st.session_state.get("re_tec", "")).strip()
+        if re in mapa_por_re:
+            r = mapa_por_re[re]
+            st.session_state["login_tec"] = str(r["Login"]).strip()
+            st.session_state["nome_tec"] = str(r["Técnico"]).strip()
         else:
-            st.session_state.pop("tec_auto", None)
-            st.session_state.pop("re_auto", None)
+            st.session_state.pop("login_tec", None)
+            st.session_state.pop("nome_tec", None)
 
-    if not ativos.empty:
-        st.selectbox(
-            "Login (lista de ativos)",
-            opcoes_login,
-            key="login_sel",
-            on_change=ao_escolher_login,
-        )
-    else:
-        st.info("Lista de ativos vazia — informe o login manualmente.")
+    def ao_digitar_cep() -> None:
+        """Ao digitar o CEP, busca o endereço na API ViaCEP."""
+        cep = str(st.session_state.get("cep", "")).strip()
+        cep = "".join(ch for ch in cep if ch.isdigit())
+        if len(cep) != 8:
+            return
+        try:
+            import requests
+
+            resp = requests.get(f"https://viacep.com.br/ws/{cep}/json/", timeout=5)
+            dados = resp.json()
+            if dados and not dados.get("erro"):
+                logradouro = dados.get("logradouro", "")
+                bairro = dados.get("bairro", "")
+                end = f"{logradouro} - {bairro}".strip(" -")
+                if end:
+                    st.session_state["endereco"] = end
+                if dados.get("complemento"):
+                    st.session_state["complemento"] = dados["complemento"]
+        except Exception:
+            pass  # se a API falhar, o usuário preenche manualmente
 
     with st.container(border=True):
         st.subheader("Identificação do Técnico")
         col4, col5, col6 = st.columns(3)
-        sel = st.session_state.get("login_sel", OPCAO_OUTRO)
-        if sel in mapa_ativos:
-            login = mapa_ativos[sel]["Login"]
-            col4.text_input("Login", value=login, disabled=True)
-            re = col5.text_input("RE do Técnico *", value=str(st.session_state.get("re_auto", "")), placeholder="ex.: 8488")
-            tecnico = col6.text_input("Nome *", value=str(st.session_state.get("tec_auto", "")), placeholder="ex.: MAYKON DIAS GUIMARAES")
-        else:
-            login = col4.text_input("Login *", placeholder="ex.: Z662724")
-            re = col5.text_input("RE do Técnico *", placeholder="ex.: 8488")
-            tecnico = col6.text_input("Nome *", placeholder="ex.: MAYKON DIAS GUIMARAES")
+        login = col4.text_input("Login", key="login_tec", placeholder="ex.: Z662724")
+        re = col5.text_input("RE do Técnico *", key="re_tec", on_change=ao_digitar_re, placeholder="ex.: 8488")
+        tecnico = col6.text_input("Nome *", key="nome_tec", placeholder="ex.: MAYKON DIAS GUIMARAES")
+        if not ativos.empty and str(re).strip() in mapa_por_re:
+            st.caption(f"✅ Técnico encontrado na lista de ativos: {mapa_por_re[str(re).strip()]['Técnico']}")
 
         st.subheader("Dados do Contrato")
         col1, col2, col3 = st.columns(3)
         contrato = col1.text_input("Contrato *", placeholder="ex.: 423766173")
-        tipo = col2.selectbox("Tipo de Atendimento", TIPOS_ATENDIMENTO)
+        tipo = col2.selectbox("Tipo de Atendimento", TIPOS_ATENDIMENTO, key="tipo")
         data = col3.date_input("Data do Contrato *", value=date.today())
         wo = st.text_input("WO", placeholder="ex.: FORA TOA GPON")
 
         st.subheader("Endereço")
         col_e1, col_e2 = st.columns(2)
-        cep = col_e1.text_input("CEP *", placeholder="ex.: 09000-000")
-        endereco = col_e2.text_input("Endereço *", placeholder="Rua, avenida...")
+        cep = col_e1.text_input("CEP *", key="cep", on_change=ao_digitar_cep, placeholder="ex.: 09000-000")
+        endereco = col_e2.text_input("Endereço *", key="endereco", placeholder="Rua, avenida...")
         col_e3, col_e4 = st.columns(2)
-        numero = col_e3.text_input("Número")
-        complemento = col_e4.text_input("Complemento")
+        numero = col_e3.text_input("Número", key="numero")
+        complemento = col_e4.text_input("Complemento", key="complemento")
+        if str(cep).strip():
+            st.caption("💡 Digite o CEP para buscar o endereço automaticamente (ViaCEP).")
 
         st.subheader("Materiais Utilizados")
         materiais = carregar_materiais()
@@ -379,8 +414,12 @@ def pagina_lancar() -> None:
             erros.append("Nome do técnico é obrigatório.")
         if not cep.strip():
             erros.append("CEP é obrigatório.")
+        elif len("".join(ch for ch in cep if ch.isdigit())) != 8:
+            erros.append("CEP deve ter 8 dígitos.")
         if not endereco.strip():
             erros.append("Endereço é obrigatório.")
+        if re.strip() and not re.strip().isdigit():
+            erros.append("RE deve conter apenas números.")
         if not itens or all(not c.strip() or not d.strip() for c, d, _ in itens):
             erros.append("Selecione ao menos um material.")
         if any(q <= 0 for _, _, q in itens if q is not None):
@@ -422,6 +461,8 @@ def pagina_lancar() -> None:
                     f.write(foto.getbuffer())
 
         st.success(f"✅ Atendimento registrado com sucesso! ({len(linhas)} material(is))")
+        st.balloons()
+        st.rerun()
 
 
 def pagina_consultar() -> None:
@@ -432,14 +473,16 @@ def pagina_consultar() -> None:
         st.info("Nenhum lançamento registrado ainda.")
         return
 
-    col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+    col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
     contratos = sorted(df["Contrato"].unique())
     wos = sorted(df["WO"].unique())
     res = sorted(df["RE"].unique())
-    f_contrato = col_f1.multiselect("Filtrar por Contrato", contratos)
-    f_wo = col_f2.multiselect("Filtrar por WO", wos)
-    f_re = col_f3.multiselect("Filtrar por RE", res)
-    f_busca = col_f4.text_input("Buscar na descrição / código SAP")
+    tecnicos = sorted(df["Técnico"].unique())
+    f_contrato = col_f1.multiselect("Contrato", contratos)
+    f_wo = col_f2.multiselect("WO", wos)
+    f_re = col_f3.multiselect("RE", res)
+    f_tec = col_f4.multiselect("Técnico", tecnicos)
+    f_busca = col_f5.text_input("Buscar (código, descrição, contrato)")
 
     filtrado = df.copy()
     if f_contrato:
@@ -448,15 +491,53 @@ def pagina_consultar() -> None:
         filtrado = filtrado[filtrado["WO"].isin(f_wo)]
     if f_re:
         filtrado = filtrado[filtrado["RE"].isin(f_re)]
+    if f_tec:
+        filtrado = filtrado[filtrado["Técnico"].isin(f_tec)]
     if f_busca:
         mask = (
             filtrado["DESCRIÇÃO DO PRODUTO"].str.contains(f_busca, case=False, na=False)
             | filtrado["CÓDIGO SAP"].str.contains(f_busca, case=False, na=False)
+            | filtrado["Contrato"].str.contains(f_busca, case=False, na=False)
+            | filtrado["Técnico"].str.contains(f_busca, case=False, na=False)
         )
         filtrado = filtrado[mask]
 
-    st.metric("Total de itens", len(filtrado))
-    st.dataframe(filtrado, use_container_width=True, hide_index=True)
+    # 5) Filtrar somente os lançamentos do próprio RE
+    meus = st.checkbox("👤 Apenas meus lançamentos")
+    if meus:
+        meu_re = st.text_input("Seu RE", key="meu_re")
+        if meu_re.strip():
+            filtrado = filtrado[filtrado["RE"] == meu_re.strip()]
+
+    qtd_total = pd.to_numeric(filtrado["QUANTIDADE"], errors="coerce").sum()
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Registros", len(filtrado))
+    m2.metric("Quantidade total", int(qtd_total))
+    m3.metric("Contratos", filtrado["Contrato"].nunique())
+    m4.metric("Técnicos", filtrado["Técnico"].nunique())
+
+    # 2) Edição inline dos lançamentos
+    editado = st.data_editor(
+        filtrado, use_container_width=True, hide_index=True, num_rows="fixed",
+        key="editor_lancamentos",
+    )
+    if st.button("💾 Salvar alterações"):
+        df.loc[filtrado.index, COLUNAS] = editado[COLUNAS].astype(str).values
+        salvar_dados(df)
+        st.success("Alterações salvas com sucesso!")
+        st.rerun()
+
+    # 3) Duplicar atendimento (reaproveita contrato/endereço/técnico)
+    with st.expander("🔁 Duplicar atendimento"):
+        opcoes_dup = {
+            f"{r['Contrato']} — {r['Técnico']} ({r['Data']})": i for i, r in df.iterrows()
+        }
+        escolha = st.selectbox("Escolha um atendimento para duplicar", list(opcoes_dup))
+        if st.button("Duplicar") and escolha:
+            r = df.loc[opcoes_dup[escolha]]
+            st.session_state["prefill"] = {c: str(r.get(c, "")) for c in COLUNAS}
+            st.session_state["nav"] = "Registrar Atendimento"
+            st.rerun()
 
     excel_buffer = BytesIO()
     filtrado.to_excel(excel_buffer, index=False, engine="openpyxl")
@@ -495,6 +576,68 @@ def pagina_consultar() -> None:
             st.rerun()
 
 
+def pagina_dashboard() -> None:
+    """Dashboard: gráficos e relatório diário dos atendimentos."""
+    st.header("📊 Dashboard")
+    df = carregar_dados()
+
+    if df.empty:
+        st.info("Nenhum lançamento registrado ainda.")
+        return
+
+    df["QUANTIDADE_N"] = pd.to_numeric(df["QUANTIDADE"], errors="coerce").fillna(0)
+
+    st.subheader("Materiais mais utilizados")
+    top = (
+        df.groupby("DESCRIÇÃO DO PRODUTO", as_index=False)["QUANTIDADE_N"]
+        .sum()
+        .sort_values("QUANTIDADE_N", ascending=False)
+        .head(10)
+    )
+    if not top.empty:
+        import plotly.express as px
+
+        fig = px.bar(
+            top, x="QUANTIDADE_N", y="DESCRIÇÃO DO PRODUTO", orientation="h",
+            color="QUANTIDADE_N", color_continuous_scale="Indigo",
+            labels={"QUANTIDADE_N": "Quantidade", "DESCRIÇÃO DO PRODUTO": "Material"},
+        )
+        fig.update_layout(yaxis=dict(autorange="reversed"), height=420, margin=dict(t=20))
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Quantidade por contrato")
+    por_contrato = (
+        df.groupby("Contrato", as_index=False)["QUANTIDADE_N"].sum().sort_values("QUANTIDADE_N", ascending=False)
+    )
+    if not por_contrato.empty:
+        import plotly.express as px
+
+        fig2 = px.bar(
+            por_contrato, x="Contrato", y="QUANTIDADE_N",
+            labels={"QUANTIDADE_N": "Quantidade", "Contrato": "Contrato"},
+            color="QUANTIDADE_N", color_continuous_scale="Blues",
+        )
+        fig2.update_layout(height=320, margin=dict(t=20))
+        st.plotly_chart(fig2, use_container_width=True)
+
+    st.subheader("📅 Relatório diário")
+    hoje = date.today().strftime("%d/%m/%Y")
+    do_hoje = df[df["Data"] == hoje]
+    c1, c2 = st.columns(2)
+    c1.metric("Atendimentos hoje", do_hoje["Contrato"].nunique())
+    c2.metric("Materiais lançados hoje", int(do_hoje["QUANTIDADE_N"].sum()))
+    if not do_hoje.empty:
+        st.dataframe(do_hoje.drop(columns=["QUANTIDADE_N"]), use_container_width=True, hide_index=True)
+        st.download_button(
+            "⬇️ Baixar relatório de hoje (CSV)",
+            data=do_hoje.drop(columns=["QUANTIDADE_N"]).to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"relatorio_{date.today().isoformat()}.csv",
+            mime="text/csv",
+        )
+    else:
+        st.caption(f"Nenhum atendimento registrado em {hoje}.")
+
+
 # ---------------------------------------------------------------------------
 # App principal
 # ---------------------------------------------------------------------------
@@ -502,13 +645,19 @@ def main() -> None:
     injetar_estilos()
 
     st.sidebar.title("📦 Lançamento de Materiais")
-    st.sidebar.caption("Contratos Fora TOA")
-    pagina = st.sidebar.radio("Navegação", ["Novo lançamento", "Consultar lançamentos"])
+    st.sidebar.caption("Contratos Fora TOA · SPO-TOTALLESTE")
+    pagina = st.sidebar.radio(
+        "Navegação",
+        ["Registrar Atendimento", "Consultar lançamentos", "Dashboard"],
+        key="nav",
+    )
 
-    if pagina == "Novo lançamento":
+    if pagina == "Registrar Atendimento":
         pagina_lancar()
-    else:
+    elif pagina == "Consultar lançamentos":
         pagina_consultar()
+    else:
+        pagina_dashboard()
 
 
 if __name__ == "__main__":
