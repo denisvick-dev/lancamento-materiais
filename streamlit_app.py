@@ -223,35 +223,6 @@ def salvar_dados(df: pd.DataFrame) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Autenticação simples (usuários definidos em .streamlit/secrets.toml)
-# ---------------------------------------------------------------------------
-def autenticar() -> str | None:
-    usuarios = {}
-    try:
-        usuarios = dict(st.secrets.get("usuarios", {}))
-    except Exception:
-        usuarios = {}
-    if not usuarios:
-        usuarios = {"admin": {"senha": "admin", "nome": "Administrador", "role": "admin"}}
-
-    if "usuario_logado" in st.session_state:
-        return st.session_state["usuario_logado"]
-
-    st.title("🔐 Login — Lançamento de Materiais")
-    with st.form("login"):
-        usuario = st.text_input("Usuário")
-        senha = st.text_input("Senha", type="password")
-        ok = st.form_submit_button("Entrar")
-    if ok:
-        dados = usuarios.get(usuario)
-        if dados and dados.get("senha") == senha:
-            st.session_state["usuario_logado"] = usuario
-            st.rerun()
-        st.error("Usuário ou senha inválidos.")
-    st.stop()
-
-
-# ---------------------------------------------------------------------------
 # Páginas
 # ---------------------------------------------------------------------------
 OPCAO_OUTRO = "✏️ Outro (informar manualmente)"
@@ -462,17 +433,11 @@ def pagina_consultar() -> None:
 # App principal
 # ---------------------------------------------------------------------------
 def main() -> None:
-    usuario = autenticar()
     injetar_estilos()
 
     st.sidebar.title("📦 Lançamento de Materiais")
     st.sidebar.caption("Contratos Fora TOA")
     pagina = st.sidebar.radio("Navegação", ["Novo lançamento", "Consultar lançamentos"])
-    st.sidebar.divider()
-    st.sidebar.write(f"👤 {usuario}")
-    if st.sidebar.button("Sair"):
-        del st.session_state["usuario_logado"]
-        st.rerun()
 
     if pagina == "Novo lançamento":
         pagina_lancar()

@@ -34,10 +34,6 @@ streamlit run streamlit_app.py
   automaticamente.
 - Também é possível escolher "Outro (informar manualmente)" para digitar um login fora da lista.
 
-## Login
-
-Os usuários são definidos em `.streamlit/secrets.toml` na seção `[usuarios]`.
-
 ## Consulta por RE
 
 A tela de consulta possui filtro por **RE**, além de Contrato, WO e busca livre
