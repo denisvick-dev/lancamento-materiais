@@ -288,49 +288,51 @@ def pagina_lancar() -> None:
     st.caption("Gestão de Material")
 
     ativos = carregar_ativos()
-    mapa_ativos = {}
-    opcoes_login = []
-    for _, r in ativos.iterrows():
-        login = str(r["Login"]).strip()
-        if not login:
-            continue
-        label = f"{login} — {r['Técnico']}" if str(r["Técnico"]).strip() else login
-        opcoes_login.append(label)
-        mapa_ativos[label] = r
-    opcoes_login.append(OPCAO_OUTRO)
+    mapa_por_re = {
+        str(r["RE"]).strip(): r for _, r in ativos.iterrows() if str(r["RE"]).strip()
+    }
 
-    def ao_escolher_login() -> None:
-        sel = st.session_state.get("login_sel")
-        if sel in mapa_ativos:
-            st.session_state["tec_auto"] = mapa_ativos[sel]["Técnico"]
-            st.session_state["re_auto"] = mapa_ativos[sel]["RE"]
+    def ao_digitar_re() -> None:
+        """Ao digitar o RE, puxa Login e Nome da lista de ativos."""
+        re = str(st.session_state.get("re_tec", "")).strip()
+        if re in mapa_por_re:
+            r = mapa_por_re[re]
+            st.session_state["login_tec"] = str(r["Login"]).strip()
+            st.session_state["nome_tec"] = str(r["Técnico"]).strip()
         else:
-            st.session_state.pop("tec_auto", None)
-            st.session_state.pop("re_auto", None)
+            st.session_state.pop("login_tec", None)
+            st.session_state.pop("nome_tec", None)
 
-    if not ativos.empty:
-        st.selectbox(
-            "Login (lista de ativos)",
-            opcoes_login,
-            key="login_sel",
-            on_change=ao_escolher_login,
-        )
-    else:
-        st.info("Lista de ativos vazia — informe o login manualmente.")
+    def ao_digitar_cep() -> None:
+        """Ao digitar o CEP, busca o endereço na API ViaCEP."""
+        cep = str(st.session_state.get("cep", "")).strip()
+        cep = "".join(ch for ch in cep if ch.isdigit())
+        if len(cep) != 8:
+            return
+        try:
+            import requests
+
+            resp = requests.get(f"https://viacep.com.br/ws/{cep}/json/", timeout=5)
+            dados = resp.json()
+            if dados and not dados.get("erro"):
+                logradouro = dados.get("logradouro", "")
+                bairro = dados.get("bairro", "")
+                end = f"{logradouro} - {bairro}".strip(" -")
+                if end:
+                    st.session_state["endereco"] = end
+                if dados.get("complemento"):
+                    st.session_state["complemento"] = dados["complemento"]
+        except Exception:
+            pass  # se a API falhar, o usuário preenche manualmente
 
     with st.container(border=True):
         st.subheader("Identificação do Técnico")
         col4, col5, col6 = st.columns(3)
-        sel = st.session_state.get("login_sel", OPCAO_OUTRO)
-        if sel in mapa_ativos:
-            login = mapa_ativos[sel]["Login"]
-            col4.text_input("Login", value=login, disabled=True)
-            re = col5.text_input("RE do Técnico *", value=str(st.session_state.get("re_auto", "")), placeholder="ex.: 8488")
-            tecnico = col6.text_input("Nome *", value=str(st.session_state.get("tec_auto", "")), placeholder="ex.: MAYKON DIAS GUIMARAES")
-        else:
-            login = col4.text_input("Login *", placeholder="ex.: Z662724")
-            re = col5.text_input("RE do Técnico *", placeholder="ex.: 8488")
-            tecnico = col6.text_input("Nome *", placeholder="ex.: MAYKON DIAS GUIMARAES")
+        login = col4.text_input("Login", key="login_tec", placeholder="ex.: Z662724")
+        re = col5.text_input("RE do Técnico *", key="re_tec", on_change=ao_digitar_re, placeholder="ex.: 8488")
+        tecnico = col6.text_input("Nome *", key="nome_tec", placeholder="ex.: MAYKON DIAS GUIMARAES")
+        if not ativos.empty and str(re).strip() in mapa_por_re:
+            st.caption(f"✅ Técnico encontrado na lista de ativos: {mapa_por_re[str(re).strip()]['Técnico']}")
 
         st.subheader("Dados do Contrato")
         col1, col2, col3 = st.columns(3)
@@ -341,11 +343,13 @@ def pagina_lancar() -> None:
 
         st.subheader("Endereço")
         col_e1, col_e2 = st.columns(2)
-        cep = col_e1.text_input("CEP *", placeholder="ex.: 09000-000")
-        endereco = col_e2.text_input("Endereço *", placeholder="Rua, avenida...")
+        cep = col_e1.text_input("CEP *", key="cep", on_change=ao_digitar_cep, placeholder="ex.: 09000-000")
+        endereco = col_e2.text_input("Endereço *", key="endereco", placeholder="Rua, avenida...")
         col_e3, col_e4 = st.columns(2)
-        numero = col_e3.text_input("Número")
-        complemento = col_e4.text_input("Complemento")
+        numero = col_e3.text_input("Número", key="numero")
+        complemento = col_e4.text_input("Complemento", key="complemento")
+        if str(cep).strip():
+            st.caption("💡 Digite o CEP para buscar o endereço automaticamente (ViaCEP).")
 
         st.subheader("Materiais Utilizados")
         materiais = carregar_materiais()
