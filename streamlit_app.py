@@ -10,6 +10,7 @@ from datetime import date
 
 import pandas as pd
 import streamlit as st
+import banco
 import materiais
 
 # ---------------------------------------------------------------------------
@@ -270,10 +271,10 @@ def salvar_dados(df: pd.DataFrame) -> None:
             st.cache_data.clear()
             return
         except Exception as e:
-            st.warning(f"Não foi possível salvar na planilha ({e}). Salvando no arquivo local.")
+            st.warning(f"Não foi possível salvar na planilha ({e}). Salvando no banco de dados local.")
 
-    os.makedirs(os.path.dirname(ARQUIVO_LOCAL), exist_ok=True)
-    df.to_csv(ARQUIVO_LOCAL, index=False)
+    # banco de dados local (SQLite)
+    banco.salvar_tudo(df, COLUNAS)
 
 
 # ---------------------------------------------------------------------------
