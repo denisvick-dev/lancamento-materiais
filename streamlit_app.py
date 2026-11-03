@@ -100,13 +100,25 @@ def _spreadsheet_id() -> str:
         return SPREADSHEET_ID
 
 
-def _ler_planilha(worksheet: str, ttl: str = "5m") -> pd.DataFrame | None:
-    """Lê uma aba da planilha Google; retorna None se falhar."""
-    from st_gsheets_connection import GSheetsConnection
+@st.cache_resource(show_spinner=False)
+def _cliente_gspread():
+    """Cliente gspread autenticado com a conta de serviço dos secrets."""
+    import gspread
 
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read(spreadsheet=_spreadsheet_id(), worksheet=worksheet, ttl=ttl)
-    if df is None or df.empty:
+    sa = dict(st.secrets["gcp_service_account"])
+    return gspread.service_account_from_dict(sa)
+
+
+def _ler_planilha(worksheet, ttl: str = "5m") -> pd.DataFrame | None:
+    """Lê uma aba da planilha Google via gspread; retorna None se vazia/falhar."""
+    client = _cliente_gspread()
+    ss = client.open_by_key(_spreadsheet_id())
+    ws = ss.worksheet(worksheet) if isinstance(worksheet, str) else ss.get_worksheet(worksheet)
+    valores = ws.get_all_values()
+    if not valores:
+        return None
+    df = pd.DataFrame(valores[1:], columns=valores[0])
+    if df.empty:
         return None
     return df
 
@@ -204,15 +216,19 @@ def salvar_dados(df: pd.DataFrame) -> None:
     df = df[COLUNAS]
     if _planilha_configurada():
         try:
-            from st_gsheets_connection import GSheetsConnection
-
             aba = ABA_LANCAMENTOS
             try:
                 aba = st.secrets["gsheets"].get("worksheet", ABA_LANCAMENTOS)
             except Exception:
                 pass
-            conn = st.connection("gsheets", type=GSheetsConnection)
-            conn.update(spreadsheet=_spreadsheet_id(), worksheet=aba, data=df)
+            client = _cliente_gspread()
+            ss = client.open_by_key(_spreadsheet_id())
+            try:
+                ws = ss.worksheet(aba)
+            except Exception:
+                ws = ss.add_worksheet(title=aba, rows=1000, cols=len(COLUNAS))
+            ws.clear()
+            ws.update([COLUNAS] + df.values.tolist())
             st.cache_data.clear()
             return
         except Exception as e:
