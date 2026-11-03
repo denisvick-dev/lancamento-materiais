@@ -201,20 +201,10 @@ def carregar_ativos() -> pd.DataFrame:
 
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_materiais() -> pd.DataFrame:
-    """Carrega o catálogo de materiais (CÓDIGO SAP + descrição) da planilha ou do CSV local."""
-    colunas = ["CÓDIGO SAP", "DESCRIÇÃO DO PRODUTO"]
+    """Carrega o catálogo de materiais (de materiais.py) da planilha ou do CSV local."""
     if _planilha_configurada():
-        try:
-            df = _ler_planilha(ABA_MATERIAIS)
-            if df is not None:
-                return _normalizar_colunas(df, colunas)
-        except Exception as e:
-            st.warning(f"Não foi possível ler o catálogo de materiais ({e}). Usando CSV local.")
-
-    if os.path.exists(ARQUIVO_CATALOGO):
-        df = pd.read_csv(ARQUIVO_CATALOGO, dtype=str)
-        return _normalizar_colunas(df, colunas)
-    return pd.DataFrame(columns=colunas)
+        return materiais.carregar_materiais(ler_planilha=_ler_planilha_fuzzy, avisar=st.warning)
+    return materiais.carregar_materiais()
 
 
 def carregar_dados() -> pd.DataFrame:
