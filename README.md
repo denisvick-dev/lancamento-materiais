@@ -15,9 +15,16 @@ streamlit run streamlit_app.py
 
 ## Persistência dos dados
 
-- Se houver uma planilha configurada em `.streamlit/secrets.toml` (seção `[gsheets]` com
-  `spreadsheet` e `worksheet`), os dados são salvos no Google Sheets.
-- Caso contrário, os dados ficam no arquivo local `dados/lancamentos.csv`.
+- Os lançamentos são salvos na aba **Lançamentos** da planilha Google Sheets configurada
+  em `.streamlit/secrets.toml` (seção `[gsheets]`).
+- Caso a planilha não esteja acessível, os dados ficam no arquivo local `dados/lancamentos.csv`.
+
+## Lista de ativos (login)
+
+- O campo **Login p/ Inserir material** é preenchido a partir da aba **Ativos** da planilha
+  (colunas: Login, Técnico, RE). Ao escolher um login, **Técnico** e **RE** são preenchidos
+  automaticamente.
+- Também é possível escolher "Outro (informar manualmente)" para digitar um login fora da lista.
 
 ## Login
 
