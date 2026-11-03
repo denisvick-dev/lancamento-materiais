@@ -530,11 +530,12 @@ def pagina_consultar() -> None:
     # 3) Duplicar atendimento (reaproveita contrato/endereço/técnico)
     with st.expander("🔁 Duplicar atendimento"):
         opcoes_dup = {
-            f"{r['Contrato']} — {r['Técnico']} ({r['Data']})": i for i, r in df.iterrows()
+            f"{r['Contrato']} — {r['Técnico']} ({r['Data']})": pos
+            for pos, (_, r) in enumerate(df.iterrows())
         }
         escolha = st.selectbox("Escolha um atendimento para duplicar", list(opcoes_dup))
         if st.button("Duplicar") and escolha:
-            r = df.loc[opcoes_dup[escolha]]
+            r = df.iloc[opcoes_dup[escolha]]
             st.session_state["prefill"] = {c: str(r.get(c, "")) for c in COLUNAS}
             st.session_state["nav"] = "Registrar Atendimento"
             st.rerun()
@@ -591,7 +592,7 @@ def pagina_dashboard() -> None:
     top = (
         df.groupby("DESCRIÇÃO DO PRODUTO", as_index=False)["QUANTIDADE_N"]
         .sum()
-        .sort_values("QUANTIDADE_N", ascending=False)
+        .sort_values(by="QUANTIDADE_N", ascending=False)
         .head(10)
     )
     if not top.empty:
@@ -607,7 +608,9 @@ def pagina_dashboard() -> None:
 
     st.subheader("Quantidade por contrato")
     por_contrato = (
-        df.groupby("Contrato", as_index=False)["QUANTIDADE_N"].sum().sort_values("QUANTIDADE_N", ascending=False)
+        df.groupby("Contrato", as_index=False)["QUANTIDADE_N"]
+        .sum()
+        .sort_values(by="QUANTIDADE_N", ascending=False)
     )
     if not por_contrato.empty:
         import plotly.express as px
