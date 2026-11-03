@@ -3,6 +3,7 @@
 Lançamento de Materiais — Contratos Fora TOA
 Sistema para inserir e consultar os materiais lançados por contrato/WO.
 """
+import importlib
 import os
 from datetime import date
 
@@ -62,7 +63,7 @@ def _spreadsheet_id() -> str:
 
 def _ler_planilha(worksheet: str, ttl: str = "5m") -> pd.DataFrame | None:
     """Lê uma aba da planilha Google; retorna None se falhar."""
-    from st_gsheets_connection import GSheetsConnection
+    from streamlit_gsheets import GSheetsConnection
 
     conn = st.connection("gsheets", type=GSheetsConnection)
     df = conn.read(spreadsheet=_spreadsheet_id(), worksheet=worksheet, ttl=ttl)
@@ -146,7 +147,9 @@ def salvar_dados(df: pd.DataFrame) -> None:
     df = df[COLUNAS]
     if _planilha_configurada():
         try:
-            from st_gsheets_connection import GSheetsConnection
+            GSheetsConnection = importlib.import_module(
+                "st_gsheets_connection"
+            ).GSheetsConnection
 
             aba = ABA_LANCAMENTOS
             try:
