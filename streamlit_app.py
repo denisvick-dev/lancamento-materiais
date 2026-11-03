@@ -3,8 +3,7 @@
 Lançamento de Materiais — Contratos Fora TOA
 Sistema para inserir e consultar os materiais lançados por contrato/WO.
 """
-
-from io import BytesIO
+import base64
 import os
 from datetime import date
 
@@ -43,6 +42,38 @@ COLUNAS = [
 
 UNIDADES = ["UN.", "M", "M²", "M³", "CX", "PC", "KG", "L", "RL"]
 
+PASTA_FONTES = "fonts"
+
+
+FONTES_CORPORATIVAS = {
+    "Inter": [400, 500, 700],
+    "Manrope": [400, 500, 600, 700, 800],
+    "Roboto": [400, 500, 700],
+}
+
+
+def injetar_estilos() -> None:
+    """Injeta as fontes corporativas (Inter/Manrope/Roboto) embutidas do repositório."""
+    faces = ""
+    for familia, pesos in FONTES_CORPORATIVAS.items():
+        for peso in pesos:
+            caminho = os.path.join(PASTA_FONTES, f"{familia.lower()}-{peso}.woff2")
+            if os.path.exists(caminho):
+                with open(caminho, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode()
+                faces += (
+                    f"@font-face {{ font-family: '{familia}'; font-style: normal; "
+                    f"font-weight: {peso}; font-display: swap; "
+                    f"src: url(data:font/woff2;base64,{b64}) format('woff2'); }}\n"
+                )
+    css = faces + (
+        "html, body, [class*='css'], .stMarkdown, .stButton, input, textarea, select "
+        "{ font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif !important; } "
+        "h1, h2, h3, h4, h5, h6, .stTitle "
+        "{ font-family: 'Manrope', 'Inter', Arial, sans-serif !important; }"
+    )
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
 
 # ---------------------------------------------------------------------------
 # Camada de persistência (Google Sheets se configurado, senão CSV local)
@@ -62,21 +93,12 @@ def _spreadsheet_id() -> str:
         return SPREADSHEET_ID
 
 
-def _conexao_planilha():
-    from streamlit_gsheets.gsheets_connection import GSheetsServiceAccountClient
-
-    spreadsheet = _spreadsheet_id()
-    if "://" not in spreadsheet:
-        spreadsheet = f"https://docs.google.com/spreadsheets/d/{spreadsheet}/edit"
-
-    credenciais = dict(st.secrets["gcp_service_account"])
-    credenciais["spreadsheet"] = spreadsheet
-    return GSheetsServiceAccountClient(credenciais)
-
-
-def _ler_planilha(worksheet: str | int, ttl: int = 300) -> pd.DataFrame | None:
+def _ler_planilha(worksheet: str, ttl: str = "5m") -> pd.DataFrame | None:
     """Lê uma aba da planilha Google; retorna None se falhar."""
-    df = _conexao_planilha().read(worksheet=worksheet, ttl=ttl)
+    from st_gsheets_connection import GSheetsConnection
+
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    df = conn.read(spreadsheet=_spreadsheet_id(), worksheet=worksheet, ttl=ttl)
     if df is None or df.empty:
         return None
     return df
@@ -106,30 +128,18 @@ def _normalizar_colunas(df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
     return df[colunas].fillna("").astype(str)
 
 
-def _normalizar_re(valor: object) -> str:
-    re = str(valor).strip()
-    if re.endswith(".0") and re[:-2].isdigit():
-        return re[:-2]
-    return re
-
-
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_ativos() -> pd.DataFrame:
     """Carrega a lista de ativos (login, técnico e RE) da planilha Google."""
     colunas = ["Login", "Técnico", "RE"]
     if _planilha_configurada():
         try:
-            from gspread.exceptions import WorksheetNotFound
-
             aba = ABA_ATIVOS
             try:
                 aba = st.secrets["gsheets"].get("ativos_worksheet", ABA_ATIVOS)
             except Exception:
                 pass
-            try:
-                df = _ler_planilha(aba)
-            except WorksheetNotFound:
-                df = None
+            df = _ler_planilha(aba)
             if df is None:  # tenta a primeira aba caso "Ativos" não exista
                 df = _ler_planilha(0)
             if df is not None:
@@ -169,12 +179,15 @@ def salvar_dados(df: pd.DataFrame) -> None:
     df = df[COLUNAS]
     if _planilha_configurada():
         try:
+            from st_gsheets_connection import GSheetsConnection
+
             aba = ABA_LANCAMENTOS
             try:
                 aba = st.secrets["gsheets"].get("worksheet", ABA_LANCAMENTOS)
             except Exception:
                 pass
-            _conexao_planilha().update(worksheet=aba, data=df)
+            conn = st.connection("gsheets", type=GSheetsConnection)
+            conn.update(spreadsheet=_spreadsheet_id(), worksheet=aba, data=df)
             st.cache_data.clear()
             return
         except Exception as e:
@@ -232,70 +245,26 @@ def pagina_lancar() -> None:
         label = f"{login} — {r['Técnico']}" if str(r["Técnico"]).strip() else login
         opcoes_login.append(label)
         mapa_ativos[label] = r
-    opcoes_por_re: dict[str, list[str]] = {}
-    for label, ativo in mapa_ativos.items():
-        re = _normalizar_re(ativo["RE"])
-        if re:
-            opcoes_por_re.setdefault(re, []).append(label)
     opcoes_login.append(OPCAO_OUTRO)
 
     def ao_escolher_login() -> None:
         sel = st.session_state.get("login_sel")
         if sel in mapa_ativos:
-            ativo = mapa_ativos[sel]
-            st.session_state["re_input"] = _normalizar_re(ativo["RE"])
-            st.session_state["tecnico_input"] = str(ativo["Técnico"]).strip()
-            st.session_state["login_manual"] = ""
+            st.session_state["tec_auto"] = mapa_ativos[sel]["Técnico"]
+            st.session_state["re_auto"] = mapa_ativos[sel]["RE"]
         else:
-            st.session_state["re_input"] = ""
-            st.session_state["tecnico_input"] = ""
-            st.session_state["login_manual"] = ""
-
-    def ao_digitar_re() -> None:
-        re = _normalizar_re(st.session_state.get("re_input", ""))
-        correspondencias = opcoes_por_re.get(re, [])
-        if correspondencias:
-            sel_atual = st.session_state.get("login_sel")
-            sel = sel_atual if sel_atual in correspondencias else correspondencias[0]
-            st.session_state["login_sel"] = sel
-            st.session_state["tecnico_input"] = str(
-                mapa_ativos[sel]["Técnico"]
-            ).strip()
-            st.session_state["login_manual"] = ""
-        else:
-            st.session_state["login_sel"] = OPCAO_OUTRO
-            st.session_state["tecnico_input"] = ""
-            st.session_state["login_manual"] = ""
+            st.session_state.pop("tec_auto", None)
+            st.session_state.pop("re_auto", None)
 
     if not ativos.empty:
-        col_login, col_re = st.columns(2)
-        col_login.selectbox(
+        st.selectbox(
             "Login p/ Inserir material (lista de ativos)",
             opcoes_login,
             key="login_sel",
             on_change=ao_escolher_login,
         )
-        if "re_input" not in st.session_state:
-            sel_inicial = st.session_state.get("login_sel")
-            if sel_inicial in mapa_ativos:
-                ativo = mapa_ativos[sel_inicial]
-                st.session_state["re_input"] = _normalizar_re(ativo["RE"])
-                st.session_state["tecnico_input"] = str(ativo["Técnico"]).strip()
     else:
         st.info("Lista de ativos vazia — informe o login manualmente.")
-        col_re = st.container()
-
-    col_re.text_input(
-        "RE",
-        key="re_input",
-        placeholder="ex.: 8488",
-        on_change=ao_digitar_re,
-    )
-    re_digitado = _normalizar_re(st.session_state.get("re_input", ""))
-    if re_digitado and re_digitado not in opcoes_por_re:
-        st.caption("RE não encontrado na lista de ativos; preencha os dados manualmente.")
-    elif len(opcoes_por_re.get(re_digitado, [])) > 1:
-        st.caption("Este RE está associado a mais de um login; confira a seleção.")
 
     with st.form("form_lancamento", clear_on_submit=True):
         col1, col2, col3 = st.columns(3)
@@ -303,28 +272,17 @@ def pagina_lancar() -> None:
         contrato = col2.text_input("Contrato", placeholder="ex.: 423766173")
         wo = col3.text_input("WO", placeholder="ex.: FORA TOA GPON")
 
-        col4, col5 = st.columns(2)
+        col4, col5, col6 = st.columns(3)
         sel = st.session_state.get("login_sel", OPCAO_OUTRO)
         if sel in mapa_ativos:
             login = mapa_ativos[sel]["Login"]
             col4.text_input("Login p/ Inserir material", value=login, disabled=True)
-            tecnico = col5.text_input(
-                "Técnico",
-                value=str(st.session_state.get("tecnico_input", "")),
-                placeholder="ex.: MAYKON DIAS GUIMARAES",
-            )
+            re = col5.text_input("RE", value=str(st.session_state.get("re_auto", "")), placeholder="ex.: 8488")
+            tecnico = col6.text_input("Técnico", value=str(st.session_state.get("tec_auto", "")), placeholder="ex.: MAYKON DIAS GUIMARAES")
         else:
-            login = col4.text_input(
-                "Login p/ Inserir material",
-                placeholder="ex.: Z662724",
-                key="login_manual",
-            )
-            tecnico = col5.text_input(
-                "Técnico",
-                value=str(st.session_state.get("tecnico_input", "")),
-                placeholder="ex.: MAYKON DIAS GUIMARAES",
-            )
-        re = st.session_state.get("re_input", "").strip()
+            login = col4.text_input("Login p/ Inserir material", placeholder="ex.: Z662724")
+            re = col5.text_input("RE", placeholder="ex.: 8488")
+            tecnico = col6.text_input("Técnico", placeholder="ex.: MAYKON DIAS GUIMARAES")
 
         col7, col8, col9 = st.columns(3)
         codigo_sap = col7.text_input("CÓDIGO SAP", placeholder="ex.: 22061736")
@@ -378,18 +336,22 @@ def pagina_consultar() -> None:
         st.info("Nenhum lançamento registrado ainda.")
         return
 
-    col_f1, col_f2, col_f3 = st.columns(3)
+    col_f1, col_f2, col_f3, col_f4 = st.columns(4)
     contratos = sorted(df["Contrato"].unique())
     wos = sorted(df["WO"].unique())
+    res = sorted(df["RE"].unique())
     f_contrato = col_f1.multiselect("Filtrar por Contrato", contratos)
     f_wo = col_f2.multiselect("Filtrar por WO", wos)
-    f_busca = col_f3.text_input("Buscar na descrição / código SAP")
+    f_re = col_f3.multiselect("Filtrar por RE", res)
+    f_busca = col_f4.text_input("Buscar na descrição / código SAP")
 
     filtrado = df.copy()
     if f_contrato:
         filtrado = filtrado[filtrado["Contrato"].isin(f_contrato)]
     if f_wo:
         filtrado = filtrado[filtrado["WO"].isin(f_wo)]
+    if f_re:
+        filtrado = filtrado[filtrado["RE"].isin(f_re)]
     if f_busca:
         mask = (
             filtrado["DESCRIÇÃO DO PRODUTO"].str.contains(f_busca, case=False, na=False)
@@ -402,11 +364,9 @@ def pagina_consultar() -> None:
 
     col_e1, col_e2 = st.columns(2)
     with col_e1:
-        excel_buffer = BytesIO()
-        filtrado.to_excel(excel_buffer, index=False, engine="openpyxl")
         st.download_button(
             "⬇️ Baixar Excel",
-            data=excel_buffer.getvalue(),
+            data=filtrado.to_excel(index=False, engine="openpyxl"),
             file_name="lancamentos_materiais.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
@@ -437,6 +397,7 @@ def pagina_consultar() -> None:
 # ---------------------------------------------------------------------------
 def main() -> None:
     usuario = autenticar()
+    injetar_estilos()
 
     st.sidebar.title("📦 Lançamento de Materiais")
     st.sidebar.caption("Contratos Fora TOA")
