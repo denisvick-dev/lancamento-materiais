@@ -3,7 +3,8 @@
 Lançamento de Materiais — Contratos Fora TOA
 Sistema para inserir e consultar os materiais lançados por contrato/WO.
 """
-import importlib
+
+from io import BytesIO
 import os
 from datetime import date
 
@@ -61,12 +62,21 @@ def _spreadsheet_id() -> str:
         return SPREADSHEET_ID
 
 
-def _ler_planilha(worksheet: str, ttl: str = "5m") -> pd.DataFrame | None:
-    """Lê uma aba da planilha Google; retorna None se falhar."""
-    from streamlit_gsheets import GSheetsConnection
+def _conexao_planilha():
+    from streamlit_gsheets.gsheets_connection import GSheetsServiceAccountClient
 
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read(spreadsheet=_spreadsheet_id(), worksheet=worksheet, ttl=ttl)
+    spreadsheet = _spreadsheet_id()
+    if "://" not in spreadsheet:
+        spreadsheet = f"https://docs.google.com/spreadsheets/d/{spreadsheet}/edit"
+
+    credenciais = dict(st.secrets["gcp_service_account"])
+    credenciais["spreadsheet"] = spreadsheet
+    return GSheetsServiceAccountClient(credenciais)
+
+
+def _ler_planilha(worksheet: str | int, ttl: int = 300) -> pd.DataFrame | None:
+    """Lê uma aba da planilha Google; retorna None se falhar."""
+    df = _conexao_planilha().read(worksheet=worksheet, ttl=ttl)
     if df is None or df.empty:
         return None
     return df
@@ -96,18 +106,30 @@ def _normalizar_colunas(df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
     return df[colunas].fillna("").astype(str)
 
 
+def _normalizar_re(valor: object) -> str:
+    re = str(valor).strip()
+    if re.endswith(".0") and re[:-2].isdigit():
+        return re[:-2]
+    return re
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_ativos() -> pd.DataFrame:
     """Carrega a lista de ativos (login, técnico e RE) da planilha Google."""
     colunas = ["Login", "Técnico", "RE"]
     if _planilha_configurada():
         try:
+            from gspread.exceptions import WorksheetNotFound
+
             aba = ABA_ATIVOS
             try:
                 aba = st.secrets["gsheets"].get("ativos_worksheet", ABA_ATIVOS)
             except Exception:
                 pass
-            df = _ler_planilha(aba)
+            try:
+                df = _ler_planilha(aba)
+            except WorksheetNotFound:
+                df = None
             if df is None:  # tenta a primeira aba caso "Ativos" não exista
                 df = _ler_planilha(0)
             if df is not None:
@@ -147,17 +169,12 @@ def salvar_dados(df: pd.DataFrame) -> None:
     df = df[COLUNAS]
     if _planilha_configurada():
         try:
-            GSheetsConnection = importlib.import_module(
-                "st_gsheets_connection"
-            ).GSheetsConnection
-
             aba = ABA_LANCAMENTOS
             try:
                 aba = st.secrets["gsheets"].get("worksheet", ABA_LANCAMENTOS)
             except Exception:
                 pass
-            conn = st.connection("gsheets", type=GSheetsConnection)
-            conn.update(spreadsheet=_spreadsheet_id(), worksheet=aba, data=df)
+            _conexao_planilha().update(worksheet=aba, data=df)
             st.cache_data.clear()
             return
         except Exception as e:
@@ -215,26 +232,70 @@ def pagina_lancar() -> None:
         label = f"{login} — {r['Técnico']}" if str(r["Técnico"]).strip() else login
         opcoes_login.append(label)
         mapa_ativos[label] = r
+    opcoes_por_re: dict[str, list[str]] = {}
+    for label, ativo in mapa_ativos.items():
+        re = _normalizar_re(ativo["RE"])
+        if re:
+            opcoes_por_re.setdefault(re, []).append(label)
     opcoes_login.append(OPCAO_OUTRO)
 
     def ao_escolher_login() -> None:
         sel = st.session_state.get("login_sel")
         if sel in mapa_ativos:
-            st.session_state["tec_auto"] = mapa_ativos[sel]["Técnico"]
-            st.session_state["re_auto"] = mapa_ativos[sel]["RE"]
+            ativo = mapa_ativos[sel]
+            st.session_state["re_input"] = _normalizar_re(ativo["RE"])
+            st.session_state["tecnico_input"] = str(ativo["Técnico"]).strip()
+            st.session_state["login_manual"] = ""
         else:
-            st.session_state.pop("tec_auto", None)
-            st.session_state.pop("re_auto", None)
+            st.session_state["re_input"] = ""
+            st.session_state["tecnico_input"] = ""
+            st.session_state["login_manual"] = ""
+
+    def ao_digitar_re() -> None:
+        re = _normalizar_re(st.session_state.get("re_input", ""))
+        correspondencias = opcoes_por_re.get(re, [])
+        if correspondencias:
+            sel_atual = st.session_state.get("login_sel")
+            sel = sel_atual if sel_atual in correspondencias else correspondencias[0]
+            st.session_state["login_sel"] = sel
+            st.session_state["tecnico_input"] = str(
+                mapa_ativos[sel]["Técnico"]
+            ).strip()
+            st.session_state["login_manual"] = ""
+        else:
+            st.session_state["login_sel"] = OPCAO_OUTRO
+            st.session_state["tecnico_input"] = ""
+            st.session_state["login_manual"] = ""
 
     if not ativos.empty:
-        st.selectbox(
+        col_login, col_re = st.columns(2)
+        col_login.selectbox(
             "Login p/ Inserir material (lista de ativos)",
             opcoes_login,
             key="login_sel",
             on_change=ao_escolher_login,
         )
+        if "re_input" not in st.session_state:
+            sel_inicial = st.session_state.get("login_sel")
+            if sel_inicial in mapa_ativos:
+                ativo = mapa_ativos[sel_inicial]
+                st.session_state["re_input"] = _normalizar_re(ativo["RE"])
+                st.session_state["tecnico_input"] = str(ativo["Técnico"]).strip()
     else:
         st.info("Lista de ativos vazia — informe o login manualmente.")
+        col_re = st.container()
+
+    col_re.text_input(
+        "RE",
+        key="re_input",
+        placeholder="ex.: 8488",
+        on_change=ao_digitar_re,
+    )
+    re_digitado = _normalizar_re(st.session_state.get("re_input", ""))
+    if re_digitado and re_digitado not in opcoes_por_re:
+        st.caption("RE não encontrado na lista de ativos; preencha os dados manualmente.")
+    elif len(opcoes_por_re.get(re_digitado, [])) > 1:
+        st.caption("Este RE está associado a mais de um login; confira a seleção.")
 
     with st.form("form_lancamento", clear_on_submit=True):
         col1, col2, col3 = st.columns(3)
@@ -242,17 +303,28 @@ def pagina_lancar() -> None:
         contrato = col2.text_input("Contrato", placeholder="ex.: 423766173")
         wo = col3.text_input("WO", placeholder="ex.: FORA TOA GPON")
 
-        col4, col5, col6 = st.columns(3)
+        col4, col5 = st.columns(2)
         sel = st.session_state.get("login_sel", OPCAO_OUTRO)
         if sel in mapa_ativos:
             login = mapa_ativos[sel]["Login"]
             col4.text_input("Login p/ Inserir material", value=login, disabled=True)
-            re = col5.text_input("RE", value=str(st.session_state.get("re_auto", "")), placeholder="ex.: 8488")
-            tecnico = col6.text_input("Técnico", value=str(st.session_state.get("tec_auto", "")), placeholder="ex.: MAYKON DIAS GUIMARAES")
+            tecnico = col5.text_input(
+                "Técnico",
+                value=str(st.session_state.get("tecnico_input", "")),
+                placeholder="ex.: MAYKON DIAS GUIMARAES",
+            )
         else:
-            login = col4.text_input("Login p/ Inserir material", placeholder="ex.: Z662724")
-            re = col5.text_input("RE", placeholder="ex.: 8488")
-            tecnico = col6.text_input("Técnico", placeholder="ex.: MAYKON DIAS GUIMARAES")
+            login = col4.text_input(
+                "Login p/ Inserir material",
+                placeholder="ex.: Z662724",
+                key="login_manual",
+            )
+            tecnico = col5.text_input(
+                "Técnico",
+                value=str(st.session_state.get("tecnico_input", "")),
+                placeholder="ex.: MAYKON DIAS GUIMARAES",
+            )
+        re = st.session_state.get("re_input", "").strip()
 
         col7, col8, col9 = st.columns(3)
         codigo_sap = col7.text_input("CÓDIGO SAP", placeholder="ex.: 22061736")
@@ -330,9 +402,11 @@ def pagina_consultar() -> None:
 
     col_e1, col_e2 = st.columns(2)
     with col_e1:
+        excel_buffer = BytesIO()
+        filtrado.to_excel(excel_buffer, index=False, engine="openpyxl")
         st.download_button(
             "⬇️ Baixar Excel",
-            data=filtrado.to_excel(index=False, engine="openpyxl"),
+            data=excel_buffer.getvalue(),
             file_name="lancamentos_materiais.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
