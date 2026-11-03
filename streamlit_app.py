@@ -284,6 +284,20 @@ def pagina_lancar() -> None:
     st.title("Atendimento FORA TOA — SPO-TOTALLESTE")
     st.caption("Gestão de Material")
 
+    # 3) Preenche o formulário ao duplicar um atendimento existente
+    prefill = st.session_state.pop("prefill", None)
+    if prefill:
+        st.session_state["re_tec"] = prefill.get("RE", "")
+        st.session_state["login_tec"] = prefill.get("Login p/ Inserir material", "")
+        st.session_state["nome_tec"] = prefill.get("Técnico", "")
+        st.session_state["contrato"] = prefill.get("Contrato", "")
+        st.session_state["wo"] = prefill.get("WO", "")
+        st.session_state["cep"] = prefill.get("CEP", "")
+        st.session_state["endereco"] = prefill.get("Endereço", "")
+        st.session_state["numero"] = prefill.get("Número", "")
+        st.session_state["complemento"] = prefill.get("Complemento", "")
+        st.toast("🔁 Atendimento duplicado — ajuste os materiais e registre!")
+
     ativos = carregar_ativos()
     mapa_por_re = {
         str(r["RE"]).strip(): r for _, r in ativos.iterrows() if str(r["RE"]).strip()
@@ -334,7 +348,7 @@ def pagina_lancar() -> None:
         st.subheader("Dados do Contrato")
         col1, col2, col3 = st.columns(3)
         contrato = col1.text_input("Contrato *", placeholder="ex.: 423766173")
-        tipo = col2.selectbox("Tipo de Atendimento", TIPOS_ATENDIMENTO)
+        tipo = col2.selectbox("Tipo de Atendimento", TIPOS_ATENDIMENTO, key="tipo")
         data = col3.date_input("Data do Contrato *", value=date.today())
         wo = st.text_input("WO", placeholder="ex.: FORA TOA GPON")
 
@@ -489,13 +503,42 @@ def pagina_consultar() -> None:
         )
         filtrado = filtrado[mask]
 
+    # 5) Filtrar somente os lançamentos do próprio RE
+    meus = st.checkbox("👤 Apenas meus lançamentos")
+    if meus:
+        meu_re = st.text_input("Seu RE", key="meu_re")
+        if meu_re.strip():
+            filtrado = filtrado[filtrado["RE"] == meu_re.strip()]
+
     qtd_total = pd.to_numeric(filtrado["QUANTIDADE"], errors="coerce").sum()
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Registros", len(filtrado))
     m2.metric("Quantidade total", int(qtd_total))
     m3.metric("Contratos", filtrado["Contrato"].nunique())
     m4.metric("Técnicos", filtrado["Técnico"].nunique())
-    st.dataframe(filtrado, use_container_width=True, hide_index=True)
+
+    # 2) Edição inline dos lançamentos
+    editado = st.data_editor(
+        filtrado, use_container_width=True, hide_index=True, num_rows="fixed",
+        key="editor_lancamentos",
+    )
+    if st.button("💾 Salvar alterações"):
+        df.loc[filtrado.index, COLUNAS] = editado[COLUNAS].astype(str).values
+        salvar_dados(df)
+        st.success("Alterações salvas com sucesso!")
+        st.rerun()
+
+    # 3) Duplicar atendimento (reaproveita contrato/endereço/técnico)
+    with st.expander("🔁 Duplicar atendimento"):
+        opcoes_dup = {
+            f"{r['Contrato']} — {r['Técnico']} ({r['Data']})": i for i, r in df.iterrows()
+        }
+        escolha = st.selectbox("Escolha um atendimento para duplicar", list(opcoes_dup))
+        if st.button("Duplicar") and escolha:
+            r = df.loc[opcoes_dup[escolha]]
+            st.session_state["prefill"] = {c: str(r.get(c, "")) for c in COLUNAS}
+            st.session_state["nav"] = "Registrar Atendimento"
+            st.rerun()
 
     excel_buffer = BytesIO()
     filtrado.to_excel(excel_buffer, index=False, engine="openpyxl")
@@ -531,6 +574,68 @@ def pagina_consultar() -> None:
             st.rerun()
 
 
+def pagina_dashboard() -> None:
+    """Dashboard: gráficos e relatório diário dos atendimentos."""
+    st.header("📊 Dashboard")
+    df = carregar_dados()
+
+    if df.empty:
+        st.info("Nenhum lançamento registrado ainda.")
+        return
+
+    df["QUANTIDADE_N"] = pd.to_numeric(df["QUANTIDADE"], errors="coerce").fillna(0)
+
+    st.subheader("Materiais mais utilizados")
+    top = (
+        df.groupby("DESCRIÇÃO DO PRODUTO", as_index=False)["QUANTIDADE_N"]
+        .sum()
+        .sort_values("QUANTIDADE_N", ascending=False)
+        .head(10)
+    )
+    if not top.empty:
+        import plotly.express as px
+
+        fig = px.bar(
+            top, x="QUANTIDADE_N", y="DESCRIÇÃO DO PRODUTO", orientation="h",
+            color="QUANTIDADE_N", color_continuous_scale="Indigo",
+            labels={"QUANTIDADE_N": "Quantidade", "DESCRIÇÃO DO PRODUTO": "Material"},
+        )
+        fig.update_layout(yaxis=dict(autorange="reversed"), height=420, margin=dict(t=20))
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Quantidade por contrato")
+    por_contrato = (
+        df.groupby("Contrato", as_index=False)["QUANTIDADE_N"].sum().sort_values("QUANTIDADE_N", ascending=False)
+    )
+    if not por_contrato.empty:
+        import plotly.express as px
+
+        fig2 = px.bar(
+            por_contrato, x="Contrato", y="QUANTIDADE_N",
+            labels={"QUANTIDADE_N": "Quantidade", "Contrato": "Contrato"},
+            color="QUANTIDADE_N", color_continuous_scale="Blues",
+        )
+        fig2.update_layout(height=320, margin=dict(t=20))
+        st.plotly_chart(fig2, use_container_width=True)
+
+    st.subheader("📅 Relatório diário")
+    hoje = date.today().strftime("%d/%m/%Y")
+    do_hoje = df[df["Data"] == hoje]
+    c1, c2 = st.columns(2)
+    c1.metric("Atendimentos hoje", do_hoje["Contrato"].nunique())
+    c2.metric("Materiais lançados hoje", int(do_hoje["QUANTIDADE_N"].sum()))
+    if not do_hoje.empty:
+        st.dataframe(do_hoje.drop(columns=["QUANTIDADE_N"]), use_container_width=True, hide_index=True)
+        st.download_button(
+            "⬇️ Baixar relatório de hoje (CSV)",
+            data=do_hoje.drop(columns=["QUANTIDADE_N"]).to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"relatorio_{date.today().isoformat()}.csv",
+            mime="text/csv",
+        )
+    else:
+        st.caption(f"Nenhum atendimento registrado em {hoje}.")
+
+
 # ---------------------------------------------------------------------------
 # App principal
 # ---------------------------------------------------------------------------
@@ -539,12 +644,18 @@ def main() -> None:
 
     st.sidebar.title("📦 Lançamento de Materiais")
     st.sidebar.caption("Contratos Fora TOA · SPO-TOTALLESTE")
-    pagina = st.sidebar.radio("Navegação", ["Registrar Atendimento", "Consultar lançamentos"])
+    pagina = st.sidebar.radio(
+        "Navegação",
+        ["Registrar Atendimento", "Consultar lançamentos", "Dashboard"],
+        key="nav",
+    )
 
     if pagina == "Registrar Atendimento":
         pagina_lancar()
-    else:
+    elif pagina == "Consultar lançamentos":
         pagina_consultar()
+    else:
+        pagina_dashboard()
 
 
 if __name__ == "__main__":
