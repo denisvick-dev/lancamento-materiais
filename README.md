@@ -2,9 +2,17 @@
 
 Sistema que lança os materiais dos contratos Fora TOA.
 
-Aplicativo Streamlit para inserir e consultar os materiais lançados por contrato/WO,
-com as colunas: **Data, Contrato, WO, Login p/ Inserir material, RE, Técnico, CÓDIGO SAP,
-DESCRIÇÃO DO PRODUTO, UM. e QUANTIDADE**.
+Aplicativo Streamlit para registrar atendimentos e lançar os materiais por contrato/WO,
+seguindo a estrutura do Atendimento FORA TOA — SPO-TOTALLESTE (Gestão de Material):
+
+- **Identificação do Técnico** (Login da lista de ativos, RE e Nome preenchidos automaticamente)
+- **Dados do Contrato** (Contrato, Tipo de Atendimento, Data, WO)
+- **Materiais Utilizados** (seleção no catálogo `catalogo_materiais.csv` / aba "Materiais" da planilha, com quantidade por item)
+- **Evidências** (upload de fotos, salvas em `dados/evidencias/<contrato>/`)
+- **Observações**
+
+Colunas salvas: **Data, Contrato, Tipo de Atendimento, WO, Login p/ Inserir material, RE,
+Técnico, CÓDIGO SAP, DESCRIÇÃO DO PRODUTO, UM., QUANTIDADE, Observações**.
 
 ## Como executar
 

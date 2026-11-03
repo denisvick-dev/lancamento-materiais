@@ -30,6 +30,7 @@ ABA_ATIVOS = "Ativos"
 COLUNAS = [
     "Data",
     "Contrato",
+    "Tipo de Atendimento",
     "WO",
     "Login p/ Inserir material",
     "RE",
@@ -38,7 +39,13 @@ COLUNAS = [
     "DESCRIÇÃO DO PRODUTO",
     "UM.",
     "QUANTIDADE",
+    "Observações",
 ]
+
+TIPOS_ATENDIMENTO = ["Encaixe FORA TOA", "Encaixe TOA"]
+
+ARQUIVO_CATALOGO = "catalogo_materiais.csv"
+ABA_MATERIAIS = "Materiais"
 
 UNIDADES = ["UN.", "M", "M²", "M³", "CX", "PC", "KG", "L", "RL"]
 
@@ -153,6 +160,24 @@ def carregar_ativos() -> pd.DataFrame:
     return pd.DataFrame(columns=colunas)
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def carregar_materiais() -> pd.DataFrame:
+    """Carrega o catálogo de materiais (CÓDIGO SAP + descrição) da planilha ou do CSV local."""
+    colunas = ["CÓDIGO SAP", "DESCRIÇÃO DO PRODUTO"]
+    if _planilha_configurada():
+        try:
+            df = _ler_planilha(ABA_MATERIAIS)
+            if df is not None:
+                return _normalizar_colunas(df, colunas)
+        except Exception as e:
+            st.warning(f"Não foi possível ler o catálogo de materiais ({e}). Usando CSV local.")
+
+    if os.path.exists(ARQUIVO_CATALOGO):
+        df = pd.read_csv(ARQUIVO_CATALOGO, dtype=str)
+        return _normalizar_colunas(df, colunas)
+    return pd.DataFrame(columns=colunas)
+
+
 def carregar_dados() -> pd.DataFrame:
     """Carrega os lançamentos registrados."""
     if _planilha_configurada():
@@ -258,7 +283,7 @@ def pagina_lancar() -> None:
 
     if not ativos.empty:
         st.selectbox(
-            "Login p/ Inserir material (lista de ativos)",
+            "Login (lista de ativos)",
             opcoes_login,
             key="login_sel",
             on_change=ao_escolher_login,
@@ -267,65 +292,106 @@ def pagina_lancar() -> None:
         st.info("Lista de ativos vazia — informe o login manualmente.")
 
     with st.form("form_lancamento", clear_on_submit=True):
-        col1, col2, col3 = st.columns(3)
-        data = col1.date_input("Data", value=date.today())
-        contrato = col2.text_input("Contrato", placeholder="ex.: 423766173")
-        wo = col3.text_input("WO", placeholder="ex.: FORA TOA GPON")
-
+        st.subheader("👤 Identificação do Técnico")
         col4, col5, col6 = st.columns(3)
         sel = st.session_state.get("login_sel", OPCAO_OUTRO)
         if sel in mapa_ativos:
             login = mapa_ativos[sel]["Login"]
-            col4.text_input("Login p/ Inserir material", value=login, disabled=True)
-            re = col5.text_input("RE", value=str(st.session_state.get("re_auto", "")), placeholder="ex.: 8488")
-            tecnico = col6.text_input("Técnico", value=str(st.session_state.get("tec_auto", "")), placeholder="ex.: MAYKON DIAS GUIMARAES")
+            col4.text_input("Login", value=login, disabled=True)
+            re = col5.text_input("RE do Técnico *", value=str(st.session_state.get("re_auto", "")), placeholder="ex.: 8488")
+            tecnico = col6.text_input("Nome *", value=str(st.session_state.get("tec_auto", "")), placeholder="ex.: MAYKON DIAS GUIMARAES")
         else:
-            login = col4.text_input("Login p/ Inserir material", placeholder="ex.: Z662724")
-            re = col5.text_input("RE", placeholder="ex.: 8488")
-            tecnico = col6.text_input("Técnico", placeholder="ex.: MAYKON DIAS GUIMARAES")
+            login = col4.text_input("Login *", placeholder="ex.: Z662724")
+            re = col5.text_input("RE do Técnico *", placeholder="ex.: 8488")
+            tecnico = col6.text_input("Nome *", placeholder="ex.: MAYKON DIAS GUIMARAES")
 
-        col7, col8, col9 = st.columns(3)
-        codigo_sap = col7.text_input("CÓDIGO SAP", placeholder="ex.: 22061736")
-        descricao = col8.text_input("DESCRIÇÃO DO PRODUTO", placeholder="ex.: CABO DROP 1FO ...")
-        um = col9.selectbox("UM.", UNIDADES)
+        st.subheader("📄 Dados do Contrato")
+        col1, col2, col3 = st.columns(3)
+        contrato = col1.text_input("Contrato *", placeholder="ex.: 423766173")
+        tipo = col2.selectbox("Tipo de Atendimento", TIPOS_ATENDIMENTO)
+        data = col3.date_input("Data do Contrato *", value=date.today())
+        wo = st.text_input("WO", placeholder="ex.: FORA TOA GPON")
 
-        quantidade = st.number_input("QUANTIDADE", min_value=0, step=1, value=1)
+        st.subheader("📦 Materiais Utilizados")
+        materiais = carregar_materiais()
+        itens = []  # (codigo, descricao, quantidade)
+        if not materiais.empty:
+            mapa_mat = {
+                f"{r['CÓDIGO SAP']} — {r['DESCRIÇÃO DO PRODUTO']}": r for _, r in materiais.iterrows()
+            }
+            selecao = st.multiselect(
+                "Selecione os materiais", list(mapa_mat), help="Busque pelo código SAP ou descrição"
+            )
+            cols_qtd = st.columns(min(len(selecao), 4) or 1)
+            for i, s in enumerate(selecao):
+                qtd = cols_qtd[i % len(cols_qtd)].number_input(
+                    f"Qtd. {s.split(' — ')[0]}", min_value=0, step=1, value=1, key=f"qtd_{i}"
+                )
+                itens.append((mapa_mat[s]["CÓDIGO SAP"], mapa_mat[s]["DESCRIÇÃO DO PRODUTO"], qtd))
+        else:
+            col7, col8, col9 = st.columns(3)
+            codigo_sap = col7.text_input("CÓDIGO SAP *", placeholder="ex.: 22061736")
+            descricao = col8.text_input("DESCRIÇÃO DO PRODUTO *", placeholder="ex.: CABO DROP 1FO ...")
+            quantidade = col9.number_input("QUANTIDADE *", min_value=0, step=1, value=1)
+            itens.append((codigo_sap, descricao, quantidade))
 
-        enviado = st.form_submit_button("💾 Salvar lançamento")
+        st.subheader("🖼️ Evidências (fotos)")
+        fotos = st.file_uploader("Adicionar fotos", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+
+        st.subheader("📝 Observações")
+        observacoes = st.text_area("Observações", placeholder="Registre aqui observações do atendimento...")
+
+        enviado = st.form_submit_button("💾 Registrar Atendimento")
 
     if enviado:
         erros = []
         if not contrato.strip():
             erros.append("Contrato é obrigatório.")
-        if not wo.strip():
-            erros.append("WO é obrigatória.")
-        if not codigo_sap.strip():
-            erros.append("CÓDIGO SAP é obrigatório.")
-        if not descricao.strip():
-            erros.append("DESCRIÇÃO DO PRODUTO é obrigatória.")
-        if quantidade <= 0:
-            erros.append("QUANTIDADE deve ser maior que zero.")
+        if not login.strip():
+            erros.append("Login é obrigatório.")
+        if not re.strip():
+            erros.append("RE do Técnico é obrigatória.")
+        if not tecnico.strip():
+            erros.append("Nome do técnico é obrigatório.")
+        if not itens or all(not c.strip() or not d.strip() for c, d, _ in itens):
+            erros.append("Selecione ao menos um material.")
+        if any(q <= 0 for _, _, q in itens if q is not None):
+            erros.append("A quantidade de cada material deve ser maior que zero.")
         if erros:
             for e in erros:
                 st.error(e)
             return
 
-        novo = {
-            "Data": data.strftime("%d/%m/%Y"),
-            "Contrato": contrato.strip(),
-            "WO": wo.strip(),
-            "Login p/ Inserir material": login.strip(),
-            "RE": re.strip(),
-            "Técnico": tecnico.strip(),
-            "CÓDIGO SAP": codigo_sap.strip(),
-            "DESCRIÇÃO DO PRODUTO": descricao.strip(),
-            "UM.": um,
-            "QUANTIDADE": str(int(quantidade)),
-        }
+        linhas = []
+        for codigo_sap, descricao, quantidade in itens:
+            if not codigo_sap.strip() or not descricao.strip():
+                continue
+            linhas.append({
+                "Data": data.strftime("%d/%m/%Y"),
+                "Contrato": contrato.strip(),
+                "Tipo de Atendimento": tipo,
+                "WO": wo.strip(),
+                "Login p/ Inserir material": login.strip(),
+                "RE": re.strip(),
+                "Técnico": tecnico.strip(),
+                "CÓDIGO SAP": codigo_sap.strip(),
+                "DESCRIÇÃO DO PRODUTO": descricao.strip(),
+                "UM.": "UN.",
+                "QUANTIDADE": str(int(quantidade)),
+                "Observações": observacoes.strip(),
+            })
         df = carregar_dados()
-        df = pd.concat([df, pd.DataFrame([novo])], ignore_index=True)
+        df = pd.concat([df, pd.DataFrame(linhas)], ignore_index=True)
         salvar_dados(df)
-        st.success("✅ Lançamento salvo com sucesso!")
+
+        if fotos:
+            pasta = os.path.join("dados", "evidencias", contrato.strip())
+            os.makedirs(pasta, exist_ok=True)
+            for foto in fotos:
+                with open(os.path.join(pasta, foto.name), "wb") as f:
+                    f.write(foto.getbuffer())
+
+        st.success(f"✅ Atendimento registrado com sucesso! ({len(linhas)} material(is))")
 
 
 def pagina_consultar() -> None:
