@@ -5,6 +5,7 @@ Banco de dados local (SQLite) com os lançamentos de materiais.
 O arquivo do banco fica em dados/lancamentos.db (fora do versionamento).
 A tabela "lancamentos" usa as mesmas colunas do app (COLUNAS do streamlit_app).
 """
+
 import os
 import sqlite3
 
@@ -61,7 +62,8 @@ def inserir(linha: dict, colunas: list[str]) -> None:
     placeholders = ", ".join("?" for _ in colunas)
     with _conectar() as conn:
         conn.execute(
-            f"INSERT INTO {TABELA} ({', '.join(colunas)}) VALUES ({placeholders})", valores
+            f"INSERT INTO {TABELA} ({', '.join(colunas)}) VALUES ({placeholders})",
+            valores,
         )
 
 
