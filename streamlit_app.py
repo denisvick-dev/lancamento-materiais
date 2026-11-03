@@ -78,7 +78,19 @@ def injetar_estilos() -> None:
         "html, body, [class*='css'], .stMarkdown, .stButton, input, textarea, select "
         "{ font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif !important; } "
         "h1, h2, h3, h4, h5, h6, .stTitle "
-        "{ font-family: 'Manrope', 'Inter', Arial, sans-serif !important; }"
+        "{ font-family: 'Manrope', 'Inter', Arial, sans-serif !important; } "
+        # fundo suave e conteúdo centralizado em card, como a referência
+        "[data-testid='stAppViewContainer'] { background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 40%); } "
+        "[data-testid='stMainBlockContainer'] { max-width: 880px; padding-top: 1.5rem; } "
+        "[data-testid='stVerticalBlockBorderWrapper'] { background: #ffffff; border: 1px solid #e5e7eb; "
+        "border-radius: 16px; padding: 1.5rem 1.75rem; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); } "
+        "[data-testid='stVerticalBlockBorderWrapper'] h2, [data-testid='stVerticalBlockBorderWrapper'] h3 "
+        "{ color: #111827; border-bottom: 1px solid #eef0f4; padding-bottom: .4rem; margin-top: 1.2rem; } "
+        "input, textarea, select { border-radius: 10px !important; border-color: #e5e7eb !important; } "
+        "[data-testid='stButton'] button { background: #4f46e5; color: #fff; "
+        "border: none; border-radius: 10px; font-weight: 600; padding: .55rem 1.4rem; } "
+        "[data-testid='stButton'] button:hover { background: #4338ca; } "
+        "[data-testid='stSidebar'] { background: #ffffff; border-right: 1px solid #e5e7eb; }"
     )
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
@@ -260,7 +272,8 @@ OPCAO_OUTRO = "✏️ Outro (informar manualmente)"
 
 
 def pagina_lancar() -> None:
-    st.header("📝 Novo lançamento de material")
+    st.title("Atendimento FORA TOA — SPO-TOTALLESTE")
+    st.caption("Gestão de Material")
 
     ativos = carregar_ativos()
     mapa_ativos = {}
@@ -293,8 +306,8 @@ def pagina_lancar() -> None:
     else:
         st.info("Lista de ativos vazia — informe o login manualmente.")
 
-    with st.form("form_lancamento", clear_on_submit=True):
-        st.subheader("👤 Identificação do Técnico")
+    with st.container(border=True):
+        st.subheader("Identificação do Técnico")
         col4, col5, col6 = st.columns(3)
         sel = st.session_state.get("login_sel", OPCAO_OUTRO)
         if sel in mapa_ativos:
@@ -307,14 +320,22 @@ def pagina_lancar() -> None:
             re = col5.text_input("RE do Técnico *", placeholder="ex.: 8488")
             tecnico = col6.text_input("Nome *", placeholder="ex.: MAYKON DIAS GUIMARAES")
 
-        st.subheader("📄 Dados do Contrato")
+        st.subheader("Dados do Contrato")
         col1, col2, col3 = st.columns(3)
         contrato = col1.text_input("Contrato *", placeholder="ex.: 423766173")
         tipo = col2.selectbox("Tipo de Atendimento", TIPOS_ATENDIMENTO)
         data = col3.date_input("Data do Contrato *", value=date.today())
         wo = st.text_input("WO", placeholder="ex.: FORA TOA GPON")
 
-        st.subheader("📦 Materiais Utilizados")
+        st.subheader("Endereço")
+        col_e1, col_e2 = st.columns(2)
+        cep = col_e1.text_input("CEP *", placeholder="ex.: 09000-000")
+        endereco = col_e2.text_input("Endereço *", placeholder="Rua, avenida...")
+        col_e3, col_e4 = st.columns(2)
+        numero = col_e3.text_input("Número")
+        complemento = col_e4.text_input("Complemento")
+
+        st.subheader("Materiais Utilizados")
         materiais = carregar_materiais()
         itens = []  # (codigo, descricao, quantidade)
         if not materiais.empty:
@@ -322,14 +343,15 @@ def pagina_lancar() -> None:
                 f"{r['CÓDIGO SAP']} — {r['DESCRIÇÃO DO PRODUTO']}": r for _, r in materiais.iterrows()
             }
             selecao = st.multiselect(
-                "Selecione os materiais", list(mapa_mat), help="Busque pelo código SAP ou descrição"
+                "Materiais", list(mapa_mat), help="Busque pelo código SAP ou descrição"
             )
-            cols_qtd = st.columns(min(len(selecao), 4) or 1)
-            for i, s in enumerate(selecao):
-                qtd = cols_qtd[i % len(cols_qtd)].number_input(
-                    f"Qtd. {s.split(' — ')[0]}", min_value=0, step=1, value=1, key=f"qtd_{i}"
-                )
-                itens.append((mapa_mat[s]["CÓDIGO SAP"], mapa_mat[s]["DESCRIÇÃO DO PRODUTO"], qtd))
+            if selecao:
+                cols_qtd = st.columns(min(len(selecao), 4))
+                for i, s in enumerate(selecao):
+                    qtd = cols_qtd[i % len(cols_qtd)].number_input(
+                        f"Qtd. {s.split(' — ')[0]}", min_value=0, step=1, value=1, key=f"qtd_{i}"
+                    )
+                    itens.append((mapa_mat[s]["CÓDIGO SAP"], mapa_mat[s]["DESCRIÇÃO DO PRODUTO"], qtd))
         else:
             col7, col8, col9 = st.columns(3)
             codigo_sap = col7.text_input("CÓDIGO SAP *", placeholder="ex.: 22061736")
@@ -337,13 +359,22 @@ def pagina_lancar() -> None:
             quantidade = col9.number_input("QUANTIDADE *", min_value=0, step=1, value=1)
             itens.append((codigo_sap, descricao, quantidade))
 
-        st.subheader("🖼️ Evidências (fotos)")
-        fotos = st.file_uploader("Adicionar fotos", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+        st.subheader("Evidências")
+        fotos_por_categoria = {}
+        for cat in CATEGORIAS_EVIDENCIA:
+            with st.expander(cat):
+                up = st.file_uploader(
+                    f"Adicionar fotos — {cat}",
+                    type=["png", "jpg", "jpeg"],
+                    accept_multiple_files=True,
+                    key=f"ev_{cat}",
+                )
+                fotos_por_categoria[cat] = up or []
 
-        st.subheader("📝 Observações")
+        st.subheader("Observações")
         observacoes = st.text_area("Observações", placeholder="Registre aqui observações do atendimento...")
 
-        enviado = st.form_submit_button("💾 Registrar Atendimento")
+        enviado = st.button("Registrar Atendimento", type="primary", use_container_width=True)
 
     if enviado:
         erros = []
@@ -355,6 +386,10 @@ def pagina_lancar() -> None:
             erros.append("RE do Técnico é obrigatória.")
         if not tecnico.strip():
             erros.append("Nome do técnico é obrigatório.")
+        if not cep.strip():
+            erros.append("CEP é obrigatório.")
+        if not endereco.strip():
+            erros.append("Endereço é obrigatório.")
         if not itens or all(not c.strip() or not d.strip() for c, d, _ in itens):
             erros.append("Selecione ao menos um material.")
         if any(q <= 0 for _, _, q in itens if q is not None):
