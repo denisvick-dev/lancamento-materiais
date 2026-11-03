@@ -81,18 +81,38 @@ def injetar_estilos() -> None:
         "{ font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif !important; } "
         "h1, h2, h3, h4, h5, h6, .stTitle "
         "{ font-family: 'Manrope', 'Inter', Arial, sans-serif !important; } "
-        # fundo suave e conteúdo centralizado em card, como a referência
-        "[data-testid='stAppViewContainer'] { background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 40%); } "
-        "[data-testid='stMainBlockContainer'] { max-width: 880px; padding-top: 1.5rem; } "
-        "[data-testid='stVerticalBlockBorderWrapper'] { background: #ffffff; border: 1px solid #e5e7eb; "
-        "border-radius: 16px; padding: 1.5rem 1.75rem; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); } "
+        # fundo suave com faixa gradiente no topo
+        "[data-testid='stAppViewContainer'] { background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 45%); } "
+        "[data-testid='stAppViewContainer']::before { content: ''; display: block; height: 6px; "
+        "background: linear-gradient(90deg, #4f46e5, #7c3aed, #0ea5e9); } "
+        "[data-testid='stMainBlockContainer'] { max-width: 900px; padding-top: 1rem; } "
+        "[data-testid='stHeader'] { background: transparent; } "
+        # card central
+        "[data-testid='stVerticalBlockBorderWrapper'] { background: #ffffff; border: 1px solid #e8eaf0; "
+        "border-radius: 18px; padding: 1.75rem 2rem; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.10); } "
         "[data-testid='stVerticalBlockBorderWrapper'] h2, [data-testid='stVerticalBlockBorderWrapper'] h3 "
-        "{ color: #111827; border-bottom: 1px solid #eef0f4; padding-bottom: .4rem; margin-top: 1.2rem; } "
-        "input, textarea, select { border-radius: 10px !important; border-color: #e5e7eb !important; } "
-        "[data-testid='stButton'] button { background: #4f46e5; color: #fff; "
-        "border: none; border-radius: 10px; font-weight: 600; padding: .55rem 1.4rem; } "
-        "[data-testid='stButton'] button:hover { background: #4338ca; } "
-        "[data-testid='stSidebar'] { background: #ffffff; border-right: 1px solid #e5e7eb; }"
+        "{ color: #0f172a; border-bottom: 2px solid #eef0f4; padding-bottom: .45rem; margin-top: 1.4rem; "
+        "letter-spacing: -0.01em; } "
+        # campos
+        "input, textarea, select { border-radius: 10px !important; border-color: #e2e8f0 !important; "
+        "background: #fbfcfe !important; transition: border-color .15s, box-shadow .15s; } "
+        "input:focus, textarea:focus, select:focus { border-color: #6366f1 !important; "
+        "box-shadow: 0 0 0 3px rgba(99, 102, 241, .15) !important; background: #fff !important; } "
+        # botões
+        "[data-testid='stButton'] button { background: linear-gradient(135deg, #4f46e5, #6d28d9); color: #fff; "
+        "border: none; border-radius: 12px; font-weight: 700; padding: .6rem 1.5rem; "
+        "box-shadow: 0 4px 14px rgba(79, 70, 229, .35); transition: transform .12s, box-shadow .12s; } "
+        "[data-testid='stButton'] button:hover { transform: translateY(-1px); "
+        "box-shadow: 0 6px 18px rgba(79, 70, 229, .45); } "
+        # barra lateral com marca
+        "[data-testid='stSidebar'] { background: #ffffff; border-right: 1px solid #e8eaf0; } "
+        "[data-testid='stSidebar'] [data-testid='stMarkdown'] h1 { font-size: 1.25rem; "
+        "background: linear-gradient(90deg, #4f46e5, #0ea5e9); -webkit-background-clip: text; "
+        "background-clip: text; color: transparent; } "
+        # tabela e métricas
+        "[data-testid='stDataFrame'] { border-radius: 12px; overflow: hidden; } "
+        "[data-testid='stMetric'] { background: #f8fafc; border: 1px solid #e8eaf0; border-radius: 12px; padding: .5rem .75rem; } "
+        "[data-testid='stMetricValue'] { color: #4f46e5; }"
     )
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
@@ -500,10 +520,10 @@ def main() -> None:
     injetar_estilos()
 
     st.sidebar.title("📦 Lançamento de Materiais")
-    st.sidebar.caption("Contratos Fora TOA")
-    pagina = st.sidebar.radio("Navegação", ["Novo lançamento", "Consultar lançamentos"])
+    st.sidebar.caption("Contratos Fora TOA · SPO-TOTALLESTE")
+    pagina = st.sidebar.radio("Navegação", ["Registrar Atendimento", "Consultar lançamentos"])
 
-    if pagina == "Novo lançamento":
+    if pagina == "Registrar Atendimento":
         pagina_lancar()
     else:
         pagina_consultar()
