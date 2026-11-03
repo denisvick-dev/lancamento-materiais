@@ -29,3 +29,13 @@ streamlit run streamlit_app.py
 ## Login
 
 Os usuários são definidos em `.streamlit/secrets.toml` na seção `[usuarios]`.
+
+## Consulta por RE
+
+A tela de consulta possui filtro por **RE**, além de Contrato, WO e busca livre
+por código SAP / descrição.
+
+## Fontes corporativas
+
+As fontes **Inter** (texto), **Manrope** (títulos) e **Roboto** estão na pasta
+`fonts/` (arquivos woff2 + licenças) e são aplicadas via CSS embutido no app.

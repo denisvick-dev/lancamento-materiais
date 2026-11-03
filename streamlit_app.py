@@ -3,6 +3,7 @@
 Lançamento de Materiais — Contratos Fora TOA
 Sistema para inserir e consultar os materiais lançados por contrato/WO.
 """
+import base64
 import os
 from datetime import date
 
@@ -40,6 +41,38 @@ COLUNAS = [
 ]
 
 UNIDADES = ["UN.", "M", "M²", "M³", "CX", "PC", "KG", "L", "RL"]
+
+PASTA_FONTES = "fonts"
+
+
+FONTES_CORPORATIVAS = {
+    "Inter": [400, 500, 700],
+    "Manrope": [400, 500, 600, 700, 800],
+    "Roboto": [400, 500, 700],
+}
+
+
+def injetar_estilos() -> None:
+    """Injeta as fontes corporativas (Inter/Manrope/Roboto) embutidas do repositório."""
+    faces = ""
+    for familia, pesos in FONTES_CORPORATIVAS.items():
+        for peso in pesos:
+            caminho = os.path.join(PASTA_FONTES, f"{familia.lower()}-{peso}.woff2")
+            if os.path.exists(caminho):
+                with open(caminho, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode()
+                faces += (
+                    f"@font-face {{ font-family: '{familia}'; font-style: normal; "
+                    f"font-weight: {peso}; font-display: swap; "
+                    f"src: url(data:font/woff2;base64,{b64}) format('woff2'); }}\n"
+                )
+    css = faces + (
+        "html, body, [class*='css'], .stMarkdown, .stButton, input, textarea, select "
+        "{ font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif !important; } "
+        "h1, h2, h3, h4, h5, h6, .stTitle "
+        "{ font-family: 'Manrope', 'Inter', Arial, sans-serif !important; }"
+    )
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -303,18 +336,22 @@ def pagina_consultar() -> None:
         st.info("Nenhum lançamento registrado ainda.")
         return
 
-    col_f1, col_f2, col_f3 = st.columns(3)
+    col_f1, col_f2, col_f3, col_f4 = st.columns(4)
     contratos = sorted(df["Contrato"].unique())
     wos = sorted(df["WO"].unique())
+    res = sorted(df["RE"].unique())
     f_contrato = col_f1.multiselect("Filtrar por Contrato", contratos)
     f_wo = col_f2.multiselect("Filtrar por WO", wos)
-    f_busca = col_f3.text_input("Buscar na descrição / código SAP")
+    f_re = col_f3.multiselect("Filtrar por RE", res)
+    f_busca = col_f4.text_input("Buscar na descrição / código SAP")
 
     filtrado = df.copy()
     if f_contrato:
         filtrado = filtrado[filtrado["Contrato"].isin(f_contrato)]
     if f_wo:
         filtrado = filtrado[filtrado["WO"].isin(f_wo)]
+    if f_re:
+        filtrado = filtrado[filtrado["RE"].isin(f_re)]
     if f_busca:
         mask = (
             filtrado["DESCRIÇÃO DO PRODUTO"].str.contains(f_busca, case=False, na=False)
@@ -360,6 +397,7 @@ def pagina_consultar() -> None:
 # ---------------------------------------------------------------------------
 def main() -> None:
     usuario = autenticar()
+    injetar_estilos()
 
     st.sidebar.title("📦 Lançamento de Materiais")
     st.sidebar.caption("Contratos Fora TOA")
