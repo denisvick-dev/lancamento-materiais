@@ -5,6 +5,7 @@ Sistema para inserir e consultar os materiais lançados por contrato/WO.
 """
 import base64
 import os
+from io import BytesIO
 from datetime import date
 
 import pandas as pd
@@ -415,11 +416,15 @@ def pagina_consultar() -> None:
     st.metric("Total de itens", len(filtrado))
     st.dataframe(filtrado, use_container_width=True, hide_index=True)
 
+    excel_buffer = BytesIO()
+    filtrado.to_excel(excel_buffer, index=False, engine="openpyxl")
+    excel_buffer.seek(0)
+
     col_e1, col_e2 = st.columns(2)
     with col_e1:
         st.download_button(
             "⬇️ Baixar Excel",
-            data=filtrado.to_excel(index=False, engine="openpyxl"),
+            data=excel_buffer.getvalue(),
             file_name="lancamentos_materiais.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
