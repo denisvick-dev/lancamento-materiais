@@ -1,16 +1,16 @@
+# -*- coding: utf-8 -*-
 """
 Lançamento de Materiais — Contratos Fora TOA
 Sistema para inserir e consultar os materiais lançados por contrato/WO.
 """
-
 import base64
 import os
-from datetime import date
 from io import BytesIO
+from datetime import date
 
 import pandas as pd
 import streamlit as st
-
+import banco
 import materiais
 
 # ---------------------------------------------------------------------------
@@ -147,11 +147,7 @@ def _cliente_gspread():
 def _ler_planilha(worksheet, ttl: str = "5m") -> pd.DataFrame | None:
     """Lê uma aba da planilha Google via gspread; retorna None se vazia/falhar."""
     ss = _cliente_gspread().open_by_key(_spreadsheet_id())
-    ws = (
-        ss.worksheet(worksheet)
-        if isinstance(worksheet, str)
-        else ss.get_worksheet(worksheet)
-    )
+    ws = ss.worksheet(worksheet) if isinstance(worksheet, str) else ss.get_worksheet(worksheet)
     valores = ws.get_all_values()
     if not valores:
         return None
@@ -170,11 +166,7 @@ def _ler_planilha_fuzzy(nome_aba: str) -> pd.DataFrame | None:
         alvo = nome_aba
     else:
         alvo = next(
-            (
-                n
-                for n in nomes
-                if nome_aba.lower() in n.lower() or n.lower() in nome_aba.lower()
-            ),
+            (n for n in nomes if nome_aba.lower() in n.lower() or n.lower() in nome_aba.lower()),
             nomes[0] if nomes else None,
         )
     if alvo is None:
@@ -221,9 +213,7 @@ def carregar_ativos() -> pd.DataFrame:
             if df is not None:
                 return _normalizar_colunas(df, colunas)
         except Exception as e:
-            st.warning(
-                f"Não foi possível ler a lista de ativos na planilha ({e}). Usando arquivo local."
-            )
+            st.warning(f"Não foi possível ler a lista de ativos na planilha ({e}). Usando arquivo local.")
 
     if os.path.exists(ARQUIVO_ATIVOS):
         df = pd.read_csv(ARQUIVO_ATIVOS, dtype=str)
@@ -235,9 +225,7 @@ def carregar_ativos() -> pd.DataFrame:
 def carregar_materiais() -> pd.DataFrame:
     """Carrega o catálogo CSV local, usando a planilha Google como fallback."""
     if _planilha_configurada():
-        return materiais.carregar_materiais(
-            ler_planilha=_ler_planilha_fuzzy, avisar=st.warning
-        )
+        return materiais.carregar_materiais(ler_planilha=_ler_planilha_fuzzy, avisar=st.warning)
     return materiais.carregar_materiais()
 
 
@@ -283,12 +271,10 @@ def salvar_dados(df: pd.DataFrame) -> None:
             st.cache_data.clear()
             return
         except Exception as e:
-            st.warning(
-                f"Não foi possível salvar na planilha ({e}). Salvando no arquivo local."
-            )
+            st.warning(f"Não foi possível salvar na planilha ({e}). Salvando no banco de dados local.")
 
-    os.makedirs(os.path.dirname(ARQUIVO_LOCAL), exist_ok=True)
-    df.to_csv(ARQUIVO_LOCAL, index=False)
+    # banco de dados local (SQLite)
+    banco.salvar_tudo(df, COLUNAS)
 
 
 # ---------------------------------------------------------------------------
@@ -354,19 +340,10 @@ def pagina_lancar() -> None:
         st.subheader("Identificação do Técnico")
         col4, col5, col6 = st.columns(3)
         login = col4.text_input("Login", key="login_tec", placeholder="ex.: Z662724")
-        re = col5.text_input(
-            "RE do Técnico *",
-            key="re_tec",
-            on_change=ao_digitar_re,
-            placeholder="ex.: 8488",
-        )
-        tecnico = col6.text_input(
-            "Nome *", key="nome_tec", placeholder="ex.: MAYKON DIAS GUIMARAES"
-        )
+        re = col5.text_input("RE do Técnico *", key="re_tec", on_change=ao_digitar_re, placeholder="ex.: 8488")
+        tecnico = col6.text_input("Nome *", key="nome_tec", placeholder="ex.: MAYKON DIAS GUIMARAES")
         if not ativos.empty and str(re).strip() in mapa_por_re:
-            st.caption(
-                f"✅ Técnico encontrado na lista de ativos: {mapa_por_re[str(re).strip()]['Técnico']}"
-            )
+            st.caption(f"✅ Técnico encontrado na lista de ativos: {mapa_por_re[str(re).strip()]['Técnico']}")
 
         st.subheader("Dados do Contrato")
         col1, col2, col3 = st.columns(3)
@@ -377,27 +354,20 @@ def pagina_lancar() -> None:
 
         st.subheader("Endereço")
         col_e1, col_e2 = st.columns(2)
-        cep = col_e1.text_input(
-            "CEP *", key="cep", on_change=ao_digitar_cep, placeholder="ex.: 09000-000"
-        )
-        endereco = col_e2.text_input(
-            "Endereço *", key="endereco", placeholder="Rua, avenida..."
-        )
+        cep = col_e1.text_input("CEP *", key="cep", on_change=ao_digitar_cep, placeholder="ex.: 09000-000")
+        endereco = col_e2.text_input("Endereço *", key="endereco", placeholder="Rua, avenida...")
         col_e3, col_e4 = st.columns(2)
         numero = col_e3.text_input("Número", key="numero")
         complemento = col_e4.text_input("Complemento", key="complemento")
         if str(cep).strip():
-            st.caption(
-                "💡 Digite o CEP para buscar o endereço automaticamente (ViaCEP)."
-            )
+            st.caption("💡 Digite o CEP para buscar o endereço automaticamente (ViaCEP).")
 
         st.subheader("Materiais Utilizados")
         materiais = carregar_materiais()
         itens = []  # (codigo, descricao, quantidade)
         if not materiais.empty:
             mapa_mat = {
-                f"{r['CÓDIGO SAP']} — {r['DESCRIÇÃO DO PRODUTO']}": r
-                for _, r in materiais.iterrows()
+                f"{r['CÓDIGO SAP']} — {r['DESCRIÇÃO DO PRODUTO']}": r for _, r in materiais.iterrows()
             }
             selecao = st.multiselect(
                 "Materiais", list(mapa_mat), help="Busque pelo código SAP ou descrição"
@@ -406,25 +376,13 @@ def pagina_lancar() -> None:
                 cols_qtd = st.columns(min(len(selecao), 4))
                 for i, s in enumerate(selecao):
                     qtd = cols_qtd[i % len(cols_qtd)].number_input(
-                        f"Qtd. {s.split(' — ')[0]}",
-                        min_value=0,
-                        step=1,
-                        value=1,
-                        key=f"qtd_{i}",
+                        f"Qtd. {s.split(' — ')[0]}", min_value=0, step=1, value=1, key=f"qtd_{i}"
                     )
-                    itens.append(
-                        (
-                            mapa_mat[s]["CÓDIGO SAP"],
-                            mapa_mat[s]["DESCRIÇÃO DO PRODUTO"],
-                            qtd,
-                        )
-                    )
+                    itens.append((mapa_mat[s]["CÓDIGO SAP"], mapa_mat[s]["DESCRIÇÃO DO PRODUTO"], qtd))
         else:
             col7, col8, col9 = st.columns(3)
             codigo_sap = col7.text_input("CÓDIGO SAP *", placeholder="ex.: 22061736")
-            descricao = col8.text_input(
-                "DESCRIÇÃO DO PRODUTO *", placeholder="ex.: CABO DROP 1FO ..."
-            )
+            descricao = col8.text_input("DESCRIÇÃO DO PRODUTO *", placeholder="ex.: CABO DROP 1FO ...")
             quantidade = col9.number_input("QUANTIDADE *", min_value=0, step=1, value=1)
             itens.append((codigo_sap, descricao, quantidade))
 
@@ -441,13 +399,9 @@ def pagina_lancar() -> None:
                 fotos_por_categoria[cat] = up or []
 
         st.subheader("Observações")
-        observacoes = st.text_area(
-            "Observações", placeholder="Registre aqui observações do atendimento..."
-        )
+        observacoes = st.text_area("Observações", placeholder="Registre aqui observações do atendimento...")
 
-        enviado = st.button(
-            "Registrar Atendimento", type="primary", use_container_width=True
-        )
+        enviado = st.button("Registrar Atendimento", type="primary", use_container_width=True)
 
     if enviado:
         erros = []
@@ -480,22 +434,20 @@ def pagina_lancar() -> None:
         for codigo_sap, descricao, quantidade in itens:
             if not codigo_sap.strip() or not descricao.strip():
                 continue
-            linhas.append(
-                {
-                    "Data": data.strftime("%d/%m/%Y"),
-                    "Contrato": contrato.strip(),
-                    "Tipo de Atendimento": tipo,
-                    "WO": wo.strip(),
-                    "Login p/ Inserir material": login.strip(),
-                    "RE": re.strip(),
-                    "Técnico": tecnico.strip(),
-                    "CÓDIGO SAP": codigo_sap.strip(),
-                    "DESCRIÇÃO DO PRODUTO": descricao.strip(),
-                    "UM.": "UN.",
-                    "QUANTIDADE": str(int(quantidade)),
-                    "Observações": observacoes.strip(),
-                }
-            )
+            linhas.append({
+                "Data": data.strftime("%d/%m/%Y"),
+                "Contrato": contrato.strip(),
+                "Tipo de Atendimento": tipo,
+                "WO": wo.strip(),
+                "Login p/ Inserir material": login.strip(),
+                "RE": re.strip(),
+                "Técnico": tecnico.strip(),
+                "CÓDIGO SAP": codigo_sap.strip(),
+                "DESCRIÇÃO DO PRODUTO": descricao.strip(),
+                "UM.": "UN.",
+                "QUANTIDADE": str(int(quantidade)),
+                "Observações": observacoes.strip(),
+            })
         df = carregar_dados()
         df = pd.concat([df, pd.DataFrame(linhas)], ignore_index=True)
         salvar_dados(df)
@@ -509,9 +461,7 @@ def pagina_lancar() -> None:
                 with open(os.path.join(pasta, foto.name), "wb") as f:
                     f.write(foto.getbuffer())
 
-        st.success(
-            f"✅ Atendimento registrado com sucesso! ({len(linhas)} material(is))"
-        )
+        st.success(f"✅ Atendimento registrado com sucesso! ({len(linhas)} material(is))")
         st.balloons()
         st.rerun()
 
@@ -569,10 +519,7 @@ def pagina_consultar() -> None:
 
     # 2) Edição inline dos lançamentos
     editado = st.data_editor(
-        filtrado,
-        use_container_width=True,
-        hide_index=True,
-        num_rows="fixed",
+        filtrado, use_container_width=True, hide_index=True, num_rows="fixed",
         key="editor_lancamentos",
     )
     if st.button("💾 Salvar alterações"):
@@ -644,44 +591,35 @@ def pagina_dashboard() -> None:
 
     st.subheader("Materiais mais utilizados")
     top = (
-        df.groupby("DESCRIÇÃO DO PRODUTO", as_index=False)
-        .agg(QUANTIDADE_N=("QUANTIDADE_N", "sum"))
-        .sort_values("QUANTIDADE_N", ascending=False)
+        df.groupby("DESCRIÇÃO DO PRODUTO", as_index=False)["QUANTIDADE_N"]
+        .sum()
+        .sort_values(by="QUANTIDADE_N", ascending=False)
         .head(10)
     )
     if not top.empty:
         import plotly.express as px
 
         fig = px.bar(
-            top,
-            x="QUANTIDADE_N",
-            y="DESCRIÇÃO DO PRODUTO",
-            orientation="h",
-            color="QUANTIDADE_N",
-            color_continuous_scale="Indigo",
+            top, x="QUANTIDADE_N", y="DESCRIÇÃO DO PRODUTO", orientation="h",
+            color="QUANTIDADE_N", color_continuous_scale="Indigo",
             labels={"QUANTIDADE_N": "Quantidade", "DESCRIÇÃO DO PRODUTO": "Material"},
         )
-        fig.update_layout(
-            yaxis=dict(autorange="reversed"), height=420, margin=dict(t=20)
-        )
+        fig.update_layout(yaxis=dict(autorange="reversed"), height=420, margin=dict(t=20))
         st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Quantidade por contrato")
     por_contrato = (
-        df.groupby("Contrato", as_index=False)
-        .agg(QUANTIDADE_N=("QUANTIDADE_N", "sum"))
-        .sort_values("QUANTIDADE_N", ascending=False)
+        df.groupby("Contrato", as_index=False)["QUANTIDADE_N"]
+        .sum()
+        .sort_values(by="QUANTIDADE_N", ascending=False)
     )
     if not por_contrato.empty:
         import plotly.express as px
 
         fig2 = px.bar(
-            por_contrato,
-            x="Contrato",
-            y="QUANTIDADE_N",
+            por_contrato, x="Contrato", y="QUANTIDADE_N",
             labels={"QUANTIDADE_N": "Quantidade", "Contrato": "Contrato"},
-            color="QUANTIDADE_N",
-            color_continuous_scale="Blues",
+            color="QUANTIDADE_N", color_continuous_scale="Blues",
         )
         fig2.update_layout(height=320, margin=dict(t=20))
         st.plotly_chart(fig2, use_container_width=True)
@@ -693,16 +631,10 @@ def pagina_dashboard() -> None:
     c1.metric("Atendimentos hoje", do_hoje["Contrato"].nunique())
     c2.metric("Materiais lançados hoje", int(do_hoje["QUANTIDADE_N"].sum()))
     if not do_hoje.empty:
-        st.dataframe(
-            do_hoje.drop(columns=["QUANTIDADE_N"]),
-            use_container_width=True,
-            hide_index=True,
-        )
+        st.dataframe(do_hoje.drop(columns=["QUANTIDADE_N"]), use_container_width=True, hide_index=True)
         st.download_button(
             "⬇️ Baixar relatório de hoje (CSV)",
-            data=do_hoje.drop(columns=["QUANTIDADE_N"])
-            .to_csv(index=False)
-            .encode("utf-8-sig"),
+            data=do_hoje.drop(columns=["QUANTIDADE_N"]).to_csv(index=False).encode("utf-8-sig"),
             file_name=f"relatorio_{date.today().isoformat()}.csv",
             mime="text/csv",
         )

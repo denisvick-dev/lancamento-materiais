@@ -25,7 +25,8 @@ streamlit run streamlit_app.py
 
 - Os lançamentos são salvos na aba **Lançamentos** da planilha Google Sheets configurada
   em `.streamlit/secrets.toml` (seção `[gsheets]`).
-- Caso a planilha não esteja acessível, os dados ficam no arquivo local `dados/lancamentos.csv`.
+- Caso a planilha não esteja acessível, os dados ficam no **banco de dados local SQLite**
+  (`dados/lancamentos.db`, tabela `lancamentos`), gerenciado pelo módulo `banco.py`.
 
 ## Lista de ativos (login)
 
