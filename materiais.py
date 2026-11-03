@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Catálogo de materiais (CÓDIGO SAP + DESCRIÇÃO DO PRODUTO).
 
@@ -6,6 +5,7 @@ Usado pelo app de lançamento para preencher a seção "Materiais Utilizados".
 A fonte padrão é o arquivo local catalogo_materiais.csv; se não for
 possível ler, usa a aba "Materiais" da planilha Google Sheets.
 """
+
 import os
 import unicodedata
 
@@ -18,6 +18,7 @@ ABA_MATERIAIS = "Materiais"
 
 def normalizar_colunas(df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
     """Garante as colunas esperadas, tolerando nomes com/sem acento."""
+
     def norm(c: str) -> str:
         c = unicodedata.normalize("NFD", str(c))
         c = "".join(ch for ch in c if unicodedata.category(ch) != "Mn")
@@ -60,7 +61,9 @@ def carregar_materiais(ler_planilha=None, avisar=None) -> pd.DataFrame:
         except Exception as e:
             erro_csv = e
             if avisar:
-                avisar(f"Não foi possível ler o catálogo CSV ({e}). Tentando a planilha Google.")
+                avisar(
+                    f"Não foi possível ler o catálogo CSV ({e}). Tentando a planilha Google."
+                )
 
     erro_planilha = None
     if ler_planilha is not None:
@@ -80,5 +83,9 @@ def carregar_materiais(ler_planilha=None, avisar=None) -> pd.DataFrame:
         if erro_planilha is not None:
             detalhes.append(f"planilha Google: {erro_planilha}")
         erro_origem = erro_planilha or erro_csv
-        raise RuntimeError(f"Não foi possível carregar o catálogo ({'; '.join(detalhes)}).") from erro_origem
-    raise FileNotFoundError(f"Catálogo CSV não encontrado e a planilha Google não está disponível: {ARQUIVO_CATALOGO}")
+        raise RuntimeError(
+            f"Não foi possível carregar o catálogo ({'; '.join(detalhes)})."
+        ) from erro_origem
+    raise FileNotFoundError(
+        f"Catálogo CSV não encontrado e a planilha Google não está disponível: {ARQUIVO_CATALOGO}"
+    )
