@@ -46,7 +46,6 @@ COLUNAS = [
 
 TIPOS_ATENDIMENTO = ["Encaixe FORA TOA", "Encaixe TOA"]
 
-ARQUIVO_CATALOGO = "catalogo_materiais.csv"
 ABA_MATERIAIS = "Materiais"
 
 UNIDADES = ["UN.", "M", "M²", "M³", "CX", "PC", "KG", "L", "RL"]
@@ -466,17 +465,20 @@ def pagina_consultar() -> None:
     col_e1, col_e2 = st.columns(2)
     with col_e1:
         st.download_button(
-            "⬇️ Baixar Excel",
+            "⬇️ Extrair lançamentos (Excel)",
             data=excel_buffer.getvalue(),
             file_name="lancamentos_materiais.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+            width="stretch",
         )
     with col_e2:
         st.download_button(
-            "⬇️ Baixar CSV",
+            "⬇️ Extrair lançamentos (CSV)",
             data=filtrado.to_csv(index=False).encode("utf-8-sig"),
             file_name="lancamentos_materiais.csv",
             mime="text/csv",
+            width="stretch",
         )
 
     with st.expander("🗑️ Excluir lançamentos"):

@@ -12,7 +12,7 @@ import unicodedata
 import pandas as pd
 
 COLUNAS_MATERIAL = ["CÓDIGO SAP", "DESCRIÇÃO DO PRODUTO"]
-ARQUIVO_CATALOGO = "catalogo_materiais.csv"
+ARQUIVO_CATALOGO = os.path.join(os.path.dirname(__file__), "catalogo_materiais.csv")
 ABA_MATERIAIS = "Materiais"
 
 
@@ -60,5 +60,4 @@ def carregar_materiais(ler_planilha=None, avisar=None) -> pd.DataFrame:
     if os.path.exists(ARQUIVO_CATALOGO):
         df = pd.read_csv(ARQUIVO_CATALOGO, dtype=str)
         return normalizar_colunas(df, COLUNAS_MATERIAL)
-    # fallback final: catálogo embutido neste módulo
-    return pd.DataFrame(CATALOGO_MATERIAIS, columns=COLUNAS_MATERIAL)
+    raise FileNotFoundError(f"Arquivo de catálogo não encontrado: {ARQUIVO_CATALOGO}")

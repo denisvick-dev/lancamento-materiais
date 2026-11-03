@@ -37,7 +37,8 @@ streamlit run streamlit_app.py
 ## Consulta por RE
 
 A tela de consulta possui filtro por **RE**, além de Contrato, WO e busca livre
-por código SAP / descrição.
+por código SAP / descrição. Use **Extrair lançamentos (Excel)** ou
+**Extrair lançamentos (CSV)** para baixar os resultados filtrados.
 
 ## Fontes corporativas
 
