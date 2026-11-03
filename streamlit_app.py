@@ -280,9 +280,6 @@ def salvar_dados(df: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 # Páginas
 # ---------------------------------------------------------------------------
-OPCAO_OUTRO = "✏️ Outro (informar manualmente)"
-
-
 def pagina_lancar() -> None:
     st.title("Atendimento FORA TOA — SPO-TOTALLESTE")
     st.caption("Gestão de Material")
@@ -404,8 +401,12 @@ def pagina_lancar() -> None:
             erros.append("Nome do técnico é obrigatório.")
         if not cep.strip():
             erros.append("CEP é obrigatório.")
+        elif len("".join(ch for ch in cep if ch.isdigit())) != 8:
+            erros.append("CEP deve ter 8 dígitos.")
         if not endereco.strip():
             erros.append("Endereço é obrigatório.")
+        if re.strip() and not re.strip().isdigit():
+            erros.append("RE deve conter apenas números.")
         if not itens or all(not c.strip() or not d.strip() for c, d, _ in itens):
             erros.append("Selecione ao menos um material.")
         if any(q <= 0 for _, _, q in itens if q is not None):
@@ -447,6 +448,8 @@ def pagina_lancar() -> None:
                     f.write(foto.getbuffer())
 
         st.success(f"✅ Atendimento registrado com sucesso! ({len(linhas)} material(is))")
+        st.balloons()
+        st.rerun()
 
 
 def pagina_consultar() -> None:
@@ -457,14 +460,16 @@ def pagina_consultar() -> None:
         st.info("Nenhum lançamento registrado ainda.")
         return
 
-    col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+    col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
     contratos = sorted(df["Contrato"].unique())
     wos = sorted(df["WO"].unique())
     res = sorted(df["RE"].unique())
-    f_contrato = col_f1.multiselect("Filtrar por Contrato", contratos)
-    f_wo = col_f2.multiselect("Filtrar por WO", wos)
-    f_re = col_f3.multiselect("Filtrar por RE", res)
-    f_busca = col_f4.text_input("Buscar na descrição / código SAP")
+    tecnicos = sorted(df["Técnico"].unique())
+    f_contrato = col_f1.multiselect("Contrato", contratos)
+    f_wo = col_f2.multiselect("WO", wos)
+    f_re = col_f3.multiselect("RE", res)
+    f_tec = col_f4.multiselect("Técnico", tecnicos)
+    f_busca = col_f5.text_input("Buscar (código, descrição, contrato)")
 
     filtrado = df.copy()
     if f_contrato:
@@ -473,14 +478,23 @@ def pagina_consultar() -> None:
         filtrado = filtrado[filtrado["WO"].isin(f_wo)]
     if f_re:
         filtrado = filtrado[filtrado["RE"].isin(f_re)]
+    if f_tec:
+        filtrado = filtrado[filtrado["Técnico"].isin(f_tec)]
     if f_busca:
         mask = (
             filtrado["DESCRIÇÃO DO PRODUTO"].str.contains(f_busca, case=False, na=False)
             | filtrado["CÓDIGO SAP"].str.contains(f_busca, case=False, na=False)
+            | filtrado["Contrato"].str.contains(f_busca, case=False, na=False)
+            | filtrado["Técnico"].str.contains(f_busca, case=False, na=False)
         )
         filtrado = filtrado[mask]
 
-    st.metric("Total de itens", len(filtrado))
+    qtd_total = pd.to_numeric(filtrado["QUANTIDADE"], errors="coerce").sum()
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Registros", len(filtrado))
+    m2.metric("Quantidade total", int(qtd_total))
+    m3.metric("Contratos", filtrado["Contrato"].nunique())
+    m4.metric("Técnicos", filtrado["Técnico"].nunique())
     st.dataframe(filtrado, use_container_width=True, hide_index=True)
 
     excel_buffer = BytesIO()
