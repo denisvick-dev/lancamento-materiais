@@ -591,8 +591,9 @@ def pagina_dashboard() -> None:
 
     st.subheader("Materiais mais utilizados")
     top = (
-        df.groupby("DESCRIÇÃO DO PRODUTO", as_index=False)["QUANTIDADE_N"]
+        df.groupby("DESCRIÇÃO DO PRODUTO")[["QUANTIDADE_N"]]
         .sum()
+        .reset_index()
         .sort_values(by="QUANTIDADE_N", ascending=False)
         .head(10)
     )
@@ -609,8 +610,9 @@ def pagina_dashboard() -> None:
 
     st.subheader("Quantidade por contrato")
     por_contrato = (
-        df.groupby("Contrato", as_index=False)["QUANTIDADE_N"]
+        df.groupby("Contrato", dropna=False)["QUANTIDADE_N"]
         .sum()
+        .reset_index(name="QUANTIDADE_N")
         .sort_values(by="QUANTIDADE_N", ascending=False)
     )
     if not por_contrato.empty:
