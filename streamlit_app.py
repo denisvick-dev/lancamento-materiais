@@ -10,6 +10,7 @@ from datetime import date
 
 import pandas as pd
 import streamlit as st
+import materiais
 
 # ---------------------------------------------------------------------------
 # Configuração da página
@@ -49,6 +50,7 @@ ARQUIVO_CATALOGO = "catalogo_materiais.csv"
 ABA_MATERIAIS = "Materiais"
 
 UNIDADES = ["UN.", "M", "M²", "M³", "CX", "PC", "KG", "L", "RL"]
+CATEGORIAS_EVIDENCIA = ["Evidências"]
 
 PASTA_FONTES = "fonts"
 
@@ -411,8 +413,10 @@ def pagina_lancar() -> None:
         df = pd.concat([df, pd.DataFrame(linhas)], ignore_index=True)
         salvar_dados(df)
 
-        if fotos:
-            pasta = os.path.join("dados", "evidencias", contrato.strip())
+        for categoria, fotos in fotos_por_categoria.items():
+            if not fotos:
+                continue
+            pasta = os.path.join("dados", "evidencias", contrato.strip(), categoria)
             os.makedirs(pasta, exist_ok=True)
             for foto in fotos:
                 with open(os.path.join(pasta, foto.name), "wb") as f:
