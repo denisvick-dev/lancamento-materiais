@@ -111,8 +111,7 @@ def _cliente_gspread():
 
 def _ler_planilha(worksheet, ttl: str = "5m") -> pd.DataFrame | None:
     """Lê uma aba da planilha Google via gspread; retorna None se vazia/falhar."""
-    client = _cliente_gspread()
-    ss = client.open_by_key(_spreadsheet_id())
+    ss = _cliente_gspread().open_by_key(_spreadsheet_id())
     ws = ss.worksheet(worksheet) if isinstance(worksheet, str) else ss.get_worksheet(worksheet)
     valores = ws.get_all_values()
     if not valores:
@@ -121,6 +120,23 @@ def _ler_planilha(worksheet, ttl: str = "5m") -> pd.DataFrame | None:
     if df.empty:
         return None
     return df
+
+
+def _ler_planilha_fuzzy(nome_aba: str) -> pd.DataFrame | None:
+    """Lê a aba pelo nome exato; se não existir, tenta nome parecido ou a 1ª aba."""
+    ss = _cliente_gspread().open_by_key(_spreadsheet_id())
+    nomes = [w.title for w in ss.worksheets()]
+    alvo = None
+    if nome_aba in nomes:
+        alvo = nome_aba
+    else:
+        alvo = next(
+            (n for n in nomes if nome_aba.lower() in n.lower() or n.lower() in nome_aba.lower()),
+            nomes[0] if nomes else None,
+        )
+    if alvo is None:
+        return None
+    return _ler_planilha(alvo)
 
 
 def _normalizar_colunas(df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
@@ -158,9 +174,7 @@ def carregar_ativos() -> pd.DataFrame:
                 aba = st.secrets["gsheets"].get("ativos_worksheet", ABA_ATIVOS)
             except Exception:
                 pass
-            df = _ler_planilha(aba)
-            if df is None:  # tenta a primeira aba caso "Ativos" não exista
-                df = _ler_planilha(0)
+            df = _ler_planilha_fuzzy(aba)
             if df is not None:
                 return _normalizar_colunas(df, colunas)
         except Exception as e:
